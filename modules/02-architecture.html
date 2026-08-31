@@ -6,6 +6,20 @@
   <title>02 · Architecture & Runtime — Flink Interactive Guide</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐿️</text></svg>" />
   <link rel="stylesheet" href="../assets/css/style.css" />
+  <style>
+    .diagram-wrap { overflow-x: auto; }
+    .diagram-wrap svg { display: block; width: 100%; height: auto; min-width: 640px; }
+    .diagram-node rect { fill: var(--bg-elevated-2); stroke: var(--border); stroke-width: 1.5; transition: stroke 0.15s, fill 0.15s; }
+    .diagram-node text { fill: var(--text); font-family: var(--sans); }
+    .diagram-node .role { fill: var(--text-faint); font-size: 10px; }
+    .diagram-node { cursor: pointer; }
+    .diagram-node:hover rect, .diagram-node:focus rect { stroke: var(--accent); }
+    .diagram-node.selected rect { stroke: var(--accent); stroke-width: 2.5; fill: var(--bg-elevated); }
+    .diagram-slot { fill: var(--bg); stroke: var(--border); }
+    .diagram-arrow { stroke: var(--text-faint); stroke-width: 1.5; fill: none; }
+    .diagram-arrow.dashed { stroke-dasharray: 4 3; }
+    .diagram-label { fill: var(--text-faint); font-size: 11px; font-family: var(--mono); }
+  </style>
 </head>
 <body>
   <header class="site-header">
@@ -49,32 +63,154 @@
         deployment decisions much less mysterious.
       </p>
 
+      <div class="callout">
+        <strong>New to distributed systems? Start here.</strong> Think of a
+        Flink cluster like a restaurant kitchen. You (the <strong>Client</strong>)
+        place an order at the front desk (the <strong>Dispatcher</strong>),
+        which calls over a <strong>manager</strong> for your order (the
+        <strong>JobManager</strong>). The manager checks with the
+        <strong>staffing coordinator</strong> (<strong>ResourceManager</strong>)
+        for free cooks, then hands the work to actual
+        <strong>cooks</strong> standing at cooking stations
+        (<strong>TaskManagers</strong> with <strong>task slots</strong>).
+        Keep this picture in mind — every term below maps onto it.
+      </div>
+
       <h2>The building blocks</h2>
-      <p>Click each component to see what it's responsible for.</p>
+      <p>
+        This is the same kitchen, drawn out as a real system diagram.
+        <strong>Click any box</strong> to get a plain-English explanation,
+        an analogy, and a concrete example.
+      </p>
 
       <div class="widget">
         <div class="widget-label">Interactive cluster diagram</div>
-        <div id="arch-diagram" class="module-grid" style="grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px;"></div>
-        <div class="result-box" id="arch-detail">Click a component above to see its role.</div>
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 760 480" role="img" aria-label="Flink cluster architecture diagram">
+            <defs>
+              <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0,0 L10,5 L0,10 z" fill="var(--text-faint)" />
+              </marker>
+            </defs>
+
+            <!-- Arrows (drawn first, so boxes sit on top) -->
+            <path class="diagram-arrow" marker-end="url(#arrow)" d="M95,70 L95,108" />
+            <text class="diagram-label" x="102" y="93">1. submit job</text>
+
+            <path class="diagram-arrow" marker-end="url(#arrow)" d="M95,160 L95,198" />
+            <text class="diagram-label" x="102" y="183">2. starts</text>
+
+            <path class="diagram-arrow" marker-end="url(#arrow)" marker-start="url(#arrow)" d="M172,215 L588,215" />
+            <text class="diagram-label" x="230" y="208">3. request / offer slots</text>
+
+            <path class="diagram-arrow" marker-end="url(#arrow)" d="M95,252 L130,318" />
+            <path class="diagram-arrow" marker-end="url(#arrow)" d="M95,252 L378,318" />
+            <path class="diagram-arrow" marker-end="url(#arrow)" d="M95,252 L628,318" />
+            <text class="diagram-label" x="98" y="270">4. deploy tasks</text>
+
+            <path class="diagram-arrow dashed" marker-end="url(#arrow)" d="M665,252 L665,318" />
+            <text class="diagram-label" x="500" y="270">tracks / can start more</text>
+
+            <path class="diagram-arrow" marker-end="url(#arrow)" d="M242,375 L268,375" />
+            <path class="diagram-arrow" marker-end="url(#arrow)" d="M492,375 L518,375" />
+            <text class="diagram-label" x="380" y="452" text-anchor="middle">data flows between TaskManagers as it's processed →</text>
+
+            <!-- Client -->
+            <g class="diagram-node" data-component="Client" tabindex="0" role="button">
+              <rect x="20" y="20" width="150" height="50" rx="8" />
+              <text x="95" y="41" text-anchor="middle" font-weight="700" font-size="13">Client</text>
+              <text class="role" x="95" y="58" text-anchor="middle">you, submitting a job</text>
+            </g>
+
+            <!-- Dispatcher -->
+            <g class="diagram-node" data-component="Dispatcher" tabindex="0" role="button">
+              <rect x="20" y="110" width="150" height="50" rx="8" />
+              <text x="95" y="131" text-anchor="middle" font-weight="700" font-size="13">Dispatcher</text>
+              <text class="role" x="95" y="148" text-anchor="middle">the front desk</text>
+            </g>
+
+            <!-- JobManager -->
+            <g class="diagram-node" data-component="JobManager" tabindex="0" role="button">
+              <rect x="20" y="200" width="150" height="52" rx="8" />
+              <text x="95" y="222" text-anchor="middle" font-weight="700" font-size="13">JobManager</text>
+              <text class="role" x="95" y="239" text-anchor="middle">the manager, per job</text>
+            </g>
+
+            <!-- ResourceManager -->
+            <g class="diagram-node" data-component="ResourceManager" tabindex="0" role="button">
+              <rect x="590" y="200" width="150" height="52" rx="8" />
+              <text x="665" y="222" text-anchor="middle" font-weight="700" font-size="13">ResourceManager</text>
+              <text class="role" x="665" y="239" text-anchor="middle">the staffing coordinator</text>
+            </g>
+
+            <!-- TaskManagers -->
+            <g class="diagram-node" data-component="TaskManager" tabindex="0" role="button">
+              <rect x="20" y="318" width="220" height="110" rx="8" />
+              <text x="130" y="340" text-anchor="middle" font-weight="700" font-size="13">TaskManager 1</text>
+              <text class="role" x="130" y="356" text-anchor="middle">a worker (cook)</text>
+              <g class="diagram-node" data-component="Task Slot" tabindex="0" role="button">
+                <rect class="diagram-slot" x="35" y="368" width="26" height="26" rx="4" />
+                <rect class="diagram-slot" x="70" y="368" width="26" height="26" rx="4" />
+                <rect class="diagram-slot" x="105" y="368" width="26" height="26" rx="4" />
+              </g>
+              <text class="role" x="130" y="412" text-anchor="middle">3 task slots</text>
+            </g>
+
+            <g class="diagram-node" data-component="TaskManager" tabindex="0" role="button">
+              <rect x="270" y="318" width="220" height="110" rx="8" />
+              <text x="380" y="340" text-anchor="middle" font-weight="700" font-size="13">TaskManager 2</text>
+              <text class="role" x="380" y="356" text-anchor="middle">a worker (cook)</text>
+              <g class="diagram-node" data-component="Task Slot" tabindex="0" role="button">
+                <rect class="diagram-slot" x="285" y="368" width="26" height="26" rx="4" />
+                <rect class="diagram-slot" x="320" y="368" width="26" height="26" rx="4" />
+                <rect class="diagram-slot" x="355" y="368" width="26" height="26" rx="4" />
+              </g>
+              <text class="role" x="380" y="412" text-anchor="middle">3 task slots</text>
+            </g>
+
+            <g class="diagram-node" data-component="TaskManager" tabindex="0" role="button">
+              <rect x="520" y="318" width="220" height="110" rx="8" />
+              <text x="630" y="340" text-anchor="middle" font-weight="700" font-size="13">TaskManager 3</text>
+              <text class="role" x="630" y="356" text-anchor="middle">a worker (cook)</text>
+              <g class="diagram-node" data-component="Task Slot" tabindex="0" role="button">
+                <rect class="diagram-slot" x="535" y="368" width="26" height="26" rx="4" />
+                <rect class="diagram-slot" x="570" y="368" width="26" height="26" rx="4" />
+                <rect class="diagram-slot" x="605" y="368" width="26" height="26" rx="4" />
+              </g>
+              <text class="role" x="630" y="412" text-anchor="middle">3 task slots</text>
+            </g>
+          </svg>
+        </div>
+        <div class="result-box" id="arch-detail">Click a box above to see what it does, in plain English.</div>
       </div>
 
       <h2>How a job actually runs</h2>
+      <p>Same five steps, first in plain English, then with the real term in parentheses:</p>
       <ol>
-        <li>You submit a job (a JAR, a Python script, or a SQL statement) to the <strong>Dispatcher</strong>.</li>
-        <li>The Dispatcher starts a <strong>JobManager</strong> for that job, which turns your program into a <strong>JobGraph</strong> — the DAG of operators.</li>
-        <li>The JobManager asks the <strong>ResourceManager</strong> for <strong>task slots</strong> on available <strong>TaskManagers</strong>.</li>
-        <li>Once slots are allocated, operators are deployed as parallel <strong>subtasks</strong> across those slots, and data starts flowing between them.</li>
-        <li>The JobManager coordinates checkpoints, tracks progress, and handles failures by restarting affected subtasks (see Module 05).</li>
+        <li>You run your program (a JAR, a Python script, or a SQL statement). This sends it to the front desk of the cluster (the <strong>Dispatcher</strong>).</li>
+        <li>The front desk calls over a dedicated manager just for your job (starts a <strong>JobManager</strong>), which turns your code into a step-by-step plan (a <strong>JobGraph</strong> — the DAG of operators).</li>
+        <li>The manager asks the staffing coordinator (<strong>ResourceManager</strong>) for enough free workers (<strong>task slots</strong> on available <strong>TaskManagers</strong>).</li>
+        <li>Once workers are assigned, your pipeline's steps start running in parallel across those workers (deployed as <strong>subtasks</strong> in <strong>slots</strong>), and data starts flowing between them.</li>
+        <li>The manager keeps watching the whole time — taking periodic snapshots (checkpoints) and restarting anything that crashes (see Module 05), so you don't have to babysit it.</li>
       </ol>
 
-      <h2>Parallelism and slots</h2>
+      <h2>Parallelism and slots, with real numbers</h2>
       <p>
-        Each TaskManager is divided into a fixed number of <strong>task
-        slots</strong> — the unit of resource isolation. A pipeline with
-        parallelism <code>4</code> runs 4 parallel instances of each
-        operator; Flink packs them into slots across the TaskManagers you
-        have available. More slots (more TaskManagers, or more slots per
-        TaskManager) means more parallel capacity.
+        Each TaskManager (worker) is cut up into a fixed number of
+        <strong>task slots</strong> — think of a slot as one cooking
+        station: exactly one instance of one part of your pipeline runs
+        there at a time. More slots means more copies of your pipeline can
+        run side by side, which is what "parallelism" means.
+      </p>
+      <p>
+        <strong>Worked example:</strong> say you have 3 TaskManagers, each
+        offering 3 slots (matching the diagram above) — that's
+        <code>3 × 3 = 9</code> slots in the whole cluster. If you set your
+        job's parallelism to <code>4</code>, Flink runs 4 parallel copies
+        of each operator, using 4 of those 9 slots, spread across whichever
+        TaskManagers have room. You could run two such jobs (using 8 of 9
+        slots) — but a third job asking for 4 more would have to wait,
+        because only 1 slot is left.
       </p>
 
       <div class="callout">
@@ -117,52 +253,66 @@
   <script src="../assets/js/app.js"></script>
   <script>
     (function () {
-      const components = [
-        {
-          name: "Client",
-          detail: "Where you submit a job from — the CLI, a REST call, or your IDE. It compiles your program into a JobGraph and sends it to the Dispatcher. It's not part of the running cluster.",
+      const components = {
+        Client: {
+          short: "The place you submit your Flink program from — your terminal, an IDE, or a CI pipeline. It packages your code into a plan (the JobGraph) and hands it off. It is NOT part of the running cluster.",
+          analogy: "A customer walking up to a restaurant counter to place an order.",
+          example: "You run `flink run word-count.jar` from your laptop's terminal — that terminal is the Client for this one submission, and once it's sent, its job is done.",
         },
-        {
-          name: "Dispatcher",
-          detail: "Accepts job submissions and starts a dedicated JobManager for each one. Also serves the Flink Web UI.",
+        Dispatcher: {
+          short: "The front desk of the cluster. It receives job submissions and, for each one, starts a brand-new JobManager to run it. It also serves the Flink Web UI you view in your browser.",
+          analogy: "The host at a restaurant who takes your order and calls over a manager to handle it.",
+          example: "Two people submit two different jobs at the same moment — the Dispatcher starts two separate JobManagers, one per job, so they don't interfere with each other.",
         },
-        {
-          name: "JobManager",
-          detail: "The 'brain' of one job: turns the JobGraph into an ExecutionGraph, requests resources, schedules tasks, and coordinates checkpoints and recovery.",
+        JobManager: {
+          short: "The manager in charge of exactly ONE job. It turns your program into a detailed execution plan, requests workers, hands out the work, and watches over it the whole time it runs — including recovering it automatically if something crashes.",
+          analogy: "The restaurant manager who plans out a big order, assigns it to specific cooks, and steps in if a cook drops a dish.",
+          example: "If a TaskManager crashes mid-job, the JobManager notices, restarts just the affected work from the last checkpoint, and the job keeps running — you don't have to do anything.",
         },
-        {
-          name: "ResourceManager",
-          detail: "Tracks available task slots across TaskManagers and hands them out to JobManagers on request. Talks to the underlying platform (Kubernetes, YARN, standalone) to start more TaskManagers if needed.",
+        ResourceManager: {
+          short: "Keeps track of how many workers (TaskManagers, and their slots) are free across the whole cluster, and hands them out to JobManagers that ask for some. If more are needed, it can ask the underlying platform (Kubernetes, YARN, etc.) to start additional TaskManagers.",
+          analogy: "The staffing coordinator who knows exactly how many cooks are free right now, and assigns them to whichever manager needs help.",
+          example: "Your job needs 4 parallel workers. The ResourceManager checks: '3 slots are free right now, and I can start 1 more TaskManager' — then hands all 4 over to your JobManager.",
         },
-        {
-          name: "TaskManager",
-          detail: "A worker process that actually executes operator subtasks. Each TaskManager offers a number of task slots and exchanges data with other TaskManagers over the network.",
+        TaskManager: {
+          short: "A worker process that does the actual work — running your map/filter/window logic on real data. Each TaskManager offers a handful of task slots and talks directly to other TaskManagers to pass data along your pipeline.",
+          analogy: "An actual cook standing at a station, doing the cooking (processing data) once told what to make.",
+          example: "For the pipeline `filter → map → sum`, one TaskManager might run the 'filter' step for part of your data while another runs 'map' for the next step, passing results between each other over the network.",
         },
-        {
-          name: "Task Slot",
-          detail: "A fixed slice of a TaskManager's resources. One parallel instance of your pipeline's operators runs per slot. The total slot count across the cluster caps how much parallelism you can run at once.",
+        "Task Slot": {
+          short: "One reserved lane of resources inside a TaskManager. Exactly one parallel copy of one part of your pipeline runs in each slot. The total number of slots in the whole cluster is the most parallel work you can run at the same time.",
+          analogy: "One cooking station at the counter — only one cook (one instance of your pipeline logic) fits at each station.",
+          example: "3 TaskManagers × 3 slots each = 9 slots total in the cluster (exactly what the diagram above shows) — so jobs can use up to 9 parallel slots before any new job has to wait for one to free up.",
         },
-      ];
+      };
 
-      const grid = document.getElementById("arch-diagram");
       const detail = document.getElementById("arch-detail");
+      const nodes = document.querySelectorAll(".diagram-node[data-component]");
 
-      components.forEach((c) => {
-        const card = document.createElement("button");
-        card.type = "button";
-        card.className = "card";
-        card.style.textAlign = "left";
-        card.style.cursor = "pointer";
-        card.style.font = "inherit";
-        card.innerHTML = `<h3 style="margin:0; font-size:0.95rem;">${c.name}</h3>`;
-        card.addEventListener("click", () => {
-          grid.querySelectorAll(".card").forEach((el) => (el.style.borderColor = "var(--border)"));
-          card.style.borderColor = "var(--accent)";
-          detail.textContent = `${c.name}: ${c.detail}`;
-          detail.className = "result-box ok";
+      function show(name) {
+        const c = components[name];
+        nodes.forEach((n) => n.classList.toggle("selected", n.getAttribute("data-component") === name));
+        detail.textContent =
+          `${name}\n\n${c.short}\n\nThink of it like: ${c.analogy}\n\nExample: ${c.example}`;
+        detail.className = "result-box ok";
+      }
+
+      nodes.forEach((node) => {
+        const name = node.getAttribute("data-component");
+        node.addEventListener("click", (e) => {
+          e.stopPropagation();
+          show(name);
         });
-        grid.appendChild(card);
+        node.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            e.stopPropagation();
+            show(name);
+          }
+        });
       });
+
+      show("Client");
     })();
 
     window.QUIZ_DATA = {
