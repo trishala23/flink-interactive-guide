@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cheatsheet — Flink Interactive Guide</title>
+  <meta name="description" content="Quick reference for the Flink DataStream API, CLI commands, and Flink SQL syntax." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐿️</text></svg>" />
+  <link rel="stylesheet" href="assets/css/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="index.html">
+        <span class="brand-mark">🐿️</span>
+        Flink Interactive Guide
+      </a>
+      <nav class="nav-links">
+        <a href="index.html">Home</a>
+        <a href="modules/01-introduction.html">Modules</a>
+        <a href="cheatsheet.html">Cheatsheet</a>
+        <a href="CONTRIBUTING.md">Contributing</a>
+        <a href="https://github.com/trishala23/flink-interactive-guide" target="_blank" rel="noopener">GitHub ↗</a>
+        <span class="progress-pill" data-progress-pill></span>
+      </nav>
+      <button class="nav-toggle" aria-label="Toggle menu">☰</button>
+    </div>
+  </header>
+
+  <div class="container" style="padding: 40px 0 80px;">
+    <div class="module-kicker">Reference</div>
+    <h1 style="font-size: 2rem; margin: 0 0 8px;">Cheatsheet</h1>
+    <p style="color: var(--text-dim); max-width: 720px;">
+      A quick-lookup reference for the concepts covered in the guide. Not a
+      substitute for the <a href="https://nightlies.apache.org/flink/flink-docs-stable/" target="_blank" rel="noopener">official Flink documentation</a>,
+      just the 20% you'll reach for 80% of the time.
+    </p>
+
+    <h2 style="margin-top: 40px;">DataStream API</h2>
+    <table>
+      <thead><tr><th>Method</th><th>Signature shape</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td><code>map</code></td><td><code>DataStream&lt;T&gt; → DataStream&lt;R&gt;</code></td><td>1:1 transform</td></tr>
+        <tr><td><code>flatMap</code></td><td><code>DataStream&lt;T&gt; → DataStream&lt;R&gt;</code></td><td>1:N transform</td></tr>
+        <tr><td><code>filter</code></td><td><code>DataStream&lt;T&gt; → DataStream&lt;T&gt;</code></td><td>Keep elements matching a predicate</td></tr>
+        <tr><td><code>keyBy</code></td><td><code>DataStream&lt;T&gt; → KeyedStream&lt;T,K&gt;</code></td><td>Logical partition by key; required for keyed state/aggregation</td></tr>
+        <tr><td><code>sum / min / max</code></td><td><code>KeyedStream → DataStream</code></td><td>Rolling aggregation, one output per input</td></tr>
+        <tr><td><code>reduce</code></td><td><code>KeyedStream&lt;T&gt; → DataStream&lt;T&gt;</code></td><td>Custom rolling combine function</td></tr>
+        <tr><td><code>window</code></td><td><code>KeyedStream → WindowedStream</code></td><td>Group into tumbling/sliding/session windows</td></tr>
+        <tr><td><code>connect</code></td><td><code>DataStream, DataStream → ConnectedStreams</code></td><td>Combine two streams while keeping their types distinct</td></tr>
+        <tr><td><code>process</code></td><td><code>→ DataStream</code></td><td>Low-level API: full access to state and timers</td></tr>
+        <tr><td><code>addSink / sinkTo</code></td><td><code>DataStream → DataStreamSink</code></td><td>Write to an external system</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Flink CLI</h2>
+    <table>
+      <thead><tr><th>Command</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td><code>flink run my-job.jar</code></td><td>Submit a job to a running cluster</td></tr>
+        <tr><td><code>flink run -d my-job.jar</code></td><td>Submit and detach (don't block the terminal)</td></tr>
+        <tr><td><code>flink list</code></td><td>List running/scheduled jobs</td></tr>
+        <tr><td><code>flink cancel &lt;job-id&gt;</code></td><td>Cancel a running job</td></tr>
+        <tr><td><code>flink stop --savepointPath s3://... &lt;job-id&gt;</code></td><td>Stop with a final savepoint</td></tr>
+        <tr><td><code>flink savepoint &lt;job-id&gt; s3://...</code></td><td>Trigger a savepoint without stopping the job</td></tr>
+        <tr><td><code>flink run -s s3://savepoint-path my-job.jar</code></td><td>Restart a job from a savepoint</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Flink SQL syntax</h2>
+    <table>
+      <thead><tr><th>Statement</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td><code>CREATE TABLE t (...) WITH (...)</code></td><td>Declare a table backed by a connector (Kafka, filesystem, JDBC, ...)</td></tr>
+        <tr><td><code>WATERMARK FOR col AS col - INTERVAL 'n' SECOND</code></td><td>Declare event-time watermarking on a column</td></tr>
+        <tr><td><code>SELECT ... FROM t GROUP BY col</code></td><td>Continuous aggregation, one updated row per key as data arrives</td></tr>
+        <tr><td><code>SELECT ... FROM t GROUP BY TUMBLE(col, INTERVAL 'n' MINUTE)</code></td><td>Tumbling window aggregation</td></tr>
+        <tr><td><code>CREATE VIEW v AS SELECT ...</code></td><td>Name a reusable query</td></tr>
+        <tr><td><code>INSERT INTO sink_table SELECT ...</code></td><td>Continuously write query results to another table/sink</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Core concepts, one line each</h2>
+    <table>
+      <thead><tr><th>Term</th><th>One-line definition</th></tr></thead>
+      <tbody>
+        <tr><td>JobManager</td><td>Coordinates one job: scheduling, checkpoints, recovery.</td></tr>
+        <tr><td>TaskManager</td><td>Worker process that executes operator subtasks in task slots.</td></tr>
+        <tr><td>Task slot</td><td>A fixed resource slice on a TaskManager; caps parallelism.</td></tr>
+        <tr><td>Event time</td><td>When an event actually happened, per its own timestamp.</td></tr>
+        <tr><td>Watermark</td><td>A claim that no more events earlier than time W should arrive.</td></tr>
+        <tr><td>Checkpoint</td><td>Automatic, periodic, whole-pipeline state snapshot for failure recovery.</td></tr>
+        <tr><td>Savepoint</td><td>Manually triggered, portable snapshot for planned operations (upgrades, rescaling).</td></tr>
+        <tr><td>Keyed state</td><td>Per-key state (ValueState, ListState, MapState) on a keyed stream.</td></tr>
+        <tr><td>Exactly-once</td><td>Every event affects state and output exactly once, even after failures — via checkpoints + replayable sources + transactional sinks.</td></tr>
+      </tbody>
+    </table>
+
+    <p style="margin-top: 40px;"><a href="modules/01-introduction.html">← Back to Module 01</a></p>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>Flink Interactive Guide — <a href="index.html">back to overview</a></p>
+    </div>
+  </footer>
+
+  <script src="assets/js/app.js"></script>
+</body>
+</html>

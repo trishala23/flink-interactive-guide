@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Flink Interactive Guide — Learn Apache Flink by doing</title>
+  <meta name="description" content="A free, interactive guide to Apache Flink: theory, diagrams, and hands-on browser exercises covering architecture, the DataStream API, windowing, state, SQL, and deployment." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐿️</text></svg>" />
+  <link rel="stylesheet" href="assets/css/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="index.html">
+        <span class="brand-mark">🐿️</span>
+        Flink Interactive Guide
+      </a>
+      <nav class="nav-links">
+        <a href="index.html">Home</a>
+        <a href="modules/01-introduction.html">Modules</a>
+        <a href="cheatsheet.html">Cheatsheet</a>
+        <a href="CONTRIBUTING.md">Contributing</a>
+        <a href="https://github.com/trishala23/flink-interactive-guide" target="_blank" rel="noopener">GitHub ↗</a>
+        <span class="progress-pill" data-progress-pill></span>
+      </nav>
+      <button class="nav-toggle" aria-label="Toggle menu">☰</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="container">
+        <span class="eyebrow">Free &amp; open · runs entirely in your browser</span>
+        <h1>Learn Apache Flink by reading it, then breaking it</h1>
+        <p class="lead">
+          Seven short modules mixing plain-English theory with interactive
+          simulations — windowing, checkpoints, a mini SQL engine, and more —
+          right on the page. No cluster, no signup, no cost.
+        </p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="modules/01-introduction.html">Start Learning →</a>
+          <a class="btn btn-secondary" href="cheatsheet.html">Jump to Cheatsheet</a>
+        </div>
+        <div class="stat-row">
+          <div class="stat"><div class="num">7</div><div class="label">Modules</div></div>
+          <div class="stat"><div class="num">6</div><div class="label">Interactive demos</div></div>
+          <div class="stat"><div class="num">7</div><div class="label">Knowledge-check quizzes</div></div>
+          <div class="stat"><div class="num">$0</div><div class="label">Cost to run</div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section container">
+      <div class="section-head">
+        <div>
+          <h2>Modules</h2>
+          <p data-overall-progress>0 of 7 modules complete (0%)</p>
+        </div>
+      </div>
+
+      <div class="module-grid">
+        <a class="card" href="modules/01-introduction.html">
+          <span class="idx">01</span>
+          <h3>Introduction to Flink</h3>
+          <p>What stream processing solves, batch vs. streaming, and where Flink fits next to Spark and Kafka Streams.</p>
+          <div class="card-foot">
+            <span class="badge badge-todo" data-module-badge="introduction">Not started</span>
+            <span>~10 min</span>
+          </div>
+        </a>
+
+        <a class="card" href="modules/02-architecture.html">
+          <span class="idx">02</span>
+          <h3>Architecture &amp; Runtime</h3>
+          <p>JobManager, TaskManagers, slots and parallelism — click through an interactive cluster diagram.</p>
+          <div class="card-foot">
+            <span class="badge badge-todo" data-module-badge="architecture">Not started</span>
+            <span>~12 min</span>
+          </div>
+        </a>
+
+        <a class="card" href="modules/03-datastream-api.html">
+          <span class="idx">03</span>
+          <h3>The DataStream API</h3>
+          <p>Sources, transformations, sinks — then predict the output of real transformation chains yourself.</p>
+          <div class="card-foot">
+            <span class="badge badge-todo" data-module-badge="datastream-api">Not started</span>
+            <span>~15 min</span>
+          </div>
+        </a>
+
+        <a class="card" href="modules/04-windows-time.html">
+          <span class="idx">04</span>
+          <h3>Time &amp; Windows</h3>
+          <p>Event time vs. processing time, watermarks, and a live tumbling/sliding/session window visualizer.</p>
+          <div class="card-foot">
+            <span class="badge badge-todo" data-module-badge="windows-time">Not started</span>
+            <span>~15 min</span>
+          </div>
+        </a>
+
+        <a class="card" href="modules/05-state-fault-tolerance.html">
+          <span class="idx">05</span>
+          <h3>State &amp; Fault Tolerance</h3>
+          <p>Keyed vs. operator state, checkpoints and savepoints — simulate a failure and watch recovery happen.</p>
+          <div class="card-foot">
+            <span class="badge badge-todo" data-module-badge="state-fault-tolerance">Not started</span>
+            <span>~15 min</span>
+          </div>
+        </a>
+
+        <a class="card" href="modules/06-table-sql.html">
+          <span class="idx">06</span>
+          <h3>Table API &amp; Flink SQL</h3>
+          <p>Write real SQL against a small in-browser dataset with a mini query engine built for this guide.</p>
+          <div class="card-foot">
+            <span class="badge badge-todo" data-module-badge="table-sql">Not started</span>
+            <span>~15 min</span>
+          </div>
+        </a>
+
+        <a class="card" href="modules/07-deployment.html">
+          <span class="idx">07</span>
+          <h3>Deployment &amp; Operations</h3>
+          <p>Standalone, YARN, Kubernetes, session vs. application clusters — a wizard picks a mode with you.</p>
+          <div class="card-foot">
+            <span class="badge badge-todo" data-module-badge="deployment">Not started</span>
+            <span>~10 min</span>
+          </div>
+        </a>
+      </div>
+    </section>
+
+    <section class="section container">
+      <div class="section-head">
+        <div>
+          <h2>How this guide works</h2>
+        </div>
+      </div>
+      <div class="module-grid">
+        <div class="card">
+          <h3>Theory first</h3>
+          <p>Every module opens with a short, plain-English explanation of the concept — no prior Flink experience assumed.</p>
+        </div>
+        <div class="card">
+          <h3>Then practice</h3>
+          <p>Each module has a hands-on widget: predict real output, drag a window size, trigger a simulated failure, run SQL.</p>
+        </div>
+        <div class="card">
+          <h3>Progress that sticks</h3>
+          <p>Pass a module's quiz and it's marked complete in your browser's local storage — no account needed, nothing leaves your device.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>
+        Built as a static site — no backend, no build step. Hosted free on
+        <a href="https://pages.github.com/" target="_blank" rel="noopener">GitHub Pages</a>.
+        See <a href="CONTRIBUTING.md">CONTRIBUTING.md</a> for the branch &amp; PR workflow.
+      </p>
+    </div>
+  </footer>
+
+  <script src="assets/js/app.js"></script>
+</body>
+</html>

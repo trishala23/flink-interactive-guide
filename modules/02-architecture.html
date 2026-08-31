@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>02 · Architecture & Runtime — Flink Interactive Guide</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐿️</text></svg>" />
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">🐿️</span>
+        Flink Interactive Guide
+      </a>
+      <nav class="nav-links">
+        <a href="../index.html">Home</a>
+        <a href="01-introduction.html">Modules</a>
+        <a href="../cheatsheet.html">Cheatsheet</a>
+        <a href="../CONTRIBUTING.md">Contributing</a>
+        <a href="https://github.com/trishala23/flink-interactive-guide" target="_blank" rel="noopener">GitHub ↗</a>
+        <span class="progress-pill" data-progress-pill></span>
+      </nav>
+      <button class="nav-toggle" aria-label="Toggle menu">☰</button>
+    </div>
+  </header>
+
+  <div class="container module-layout">
+    <aside class="module-sidebar">
+      <h4>Modules</h4>
+      <ol>
+        <li><a data-module-id="introduction" href="01-introduction.html"><span class="dot"></span>01. Introduction</a></li>
+        <li><a data-module-id="architecture" href="02-architecture.html"><span class="dot"></span>02. Architecture</a></li>
+        <li><a data-module-id="datastream-api" href="03-datastream-api.html"><span class="dot"></span>03. DataStream API</a></li>
+        <li><a data-module-id="windows-time" href="04-windows-time.html"><span class="dot"></span>04. Time &amp; Windows</a></li>
+        <li><a data-module-id="state-fault-tolerance" href="05-state-fault-tolerance.html"><span class="dot"></span>05. State &amp; Fault Tolerance</a></li>
+        <li><a data-module-id="table-sql" href="06-table-sql.html"><span class="dot"></span>06. Table API &amp; SQL</a></li>
+        <li><a data-module-id="deployment" href="07-deployment.html"><span class="dot"></span>07. Deployment</a></li>
+      </ol>
+    </aside>
+
+    <main class="module-main">
+      <div class="module-kicker">Module 02</div>
+      <h1>Architecture &amp; Runtime</h1>
+      <p class="intro">
+        Every Flink job runs across a small set of cooperating processes.
+        Understanding what each one does makes debugging, scaling, and
+        deployment decisions much less mysterious.
+      </p>
+
+      <h2>The building blocks</h2>
+      <p>Click each component to see what it's responsible for.</p>
+
+      <div class="widget">
+        <div class="widget-label">Interactive cluster diagram</div>
+        <div id="arch-diagram" class="module-grid" style="grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px;"></div>
+        <div class="result-box" id="arch-detail">Click a component above to see its role.</div>
+      </div>
+
+      <h2>How a job actually runs</h2>
+      <ol>
+        <li>You submit a job (a JAR, a Python script, or a SQL statement) to the <strong>Dispatcher</strong>.</li>
+        <li>The Dispatcher starts a <strong>JobManager</strong> for that job, which turns your program into a <strong>JobGraph</strong> — the DAG of operators.</li>
+        <li>The JobManager asks the <strong>ResourceManager</strong> for <strong>task slots</strong> on available <strong>TaskManagers</strong>.</li>
+        <li>Once slots are allocated, operators are deployed as parallel <strong>subtasks</strong> across those slots, and data starts flowing between them.</li>
+        <li>The JobManager coordinates checkpoints, tracks progress, and handles failures by restarting affected subtasks (see Module 05).</li>
+      </ol>
+
+      <h2>Parallelism and slots</h2>
+      <p>
+        Each TaskManager is divided into a fixed number of <strong>task
+        slots</strong> — the unit of resource isolation. A pipeline with
+        parallelism <code>4</code> runs 4 parallel instances of each
+        operator; Flink packs them into slots across the TaskManagers you
+        have available. More slots (more TaskManagers, or more slots per
+        TaskManager) means more parallel capacity.
+      </p>
+
+      <div class="callout">
+        <strong>Rule of thumb:</strong> total slots in a cluster is the hard
+        ceiling on how much parallelism a job can use at once. If a job
+        asks for more parallel slots than the cluster has, it simply won't
+        start until enough are free.
+      </div>
+
+      <h2>Deployment shapes</h2>
+      <p>
+        The diagram above shows a <em>session cluster</em> — one long-lived
+        set of JobManager/TaskManagers running multiple jobs. Flink also
+        supports <em>application clusters</em> (one cluster per job,
+        useful in Kubernetes) and <em>per-job clusters</em>. Module 07
+        covers when to reach for each.
+      </p>
+
+      <div id="quiz-root" data-module-id="architecture"></div>
+
+      <nav class="module-pager">
+        <a class="pager-link prev" href="01-introduction.html">
+          <span class="dir">← Previous</span>
+          <span class="title">01. Introduction to Flink</span>
+        </a>
+        <a class="pager-link next" href="03-datastream-api.html">
+          <span class="dir">Next</span>
+          <span class="title">03. The DataStream API →</span>
+        </a>
+      </nav>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>Flink Interactive Guide — <a href="../index.html">back to overview</a></p>
+    </div>
+  </footer>
+
+  <script src="../assets/js/app.js"></script>
+  <script>
+    (function () {
+      const components = [
+        {
+          name: "Client",
+          detail: "Where you submit a job from — the CLI, a REST call, or your IDE. It compiles your program into a JobGraph and sends it to the Dispatcher. It's not part of the running cluster.",
+        },
+        {
+          name: "Dispatcher",
+          detail: "Accepts job submissions and starts a dedicated JobManager for each one. Also serves the Flink Web UI.",
+        },
+        {
+          name: "JobManager",
+          detail: "The 'brain' of one job: turns the JobGraph into an ExecutionGraph, requests resources, schedules tasks, and coordinates checkpoints and recovery.",
+        },
+        {
+          name: "ResourceManager",
+          detail: "Tracks available task slots across TaskManagers and hands them out to JobManagers on request. Talks to the underlying platform (Kubernetes, YARN, standalone) to start more TaskManagers if needed.",
+        },
+        {
+          name: "TaskManager",
+          detail: "A worker process that actually executes operator subtasks. Each TaskManager offers a number of task slots and exchanges data with other TaskManagers over the network.",
+        },
+        {
+          name: "Task Slot",
+          detail: "A fixed slice of a TaskManager's resources. One parallel instance of your pipeline's operators runs per slot. The total slot count across the cluster caps how much parallelism you can run at once.",
+        },
+      ];
+
+      const grid = document.getElementById("arch-diagram");
+      const detail = document.getElementById("arch-detail");
+
+      components.forEach((c) => {
+        const card = document.createElement("button");
+        card.type = "button";
+        card.className = "card";
+        card.style.textAlign = "left";
+        card.style.cursor = "pointer";
+        card.style.font = "inherit";
+        card.innerHTML = `<h3 style="margin:0; font-size:0.95rem;">${c.name}</h3>`;
+        card.addEventListener("click", () => {
+          grid.querySelectorAll(".card").forEach((el) => (el.style.borderColor = "var(--border)"));
+          card.style.borderColor = "var(--accent)";
+          detail.textContent = `${c.name}: ${c.detail}`;
+          detail.className = "result-box ok";
+        });
+        grid.appendChild(card);
+      });
+    })();
+
+    window.QUIZ_DATA = {
+      title: "Check your understanding",
+      questions: [
+        {
+          prompt: "What starts a JobManager for a newly submitted job?",
+          options: ["The TaskManager", "The Dispatcher", "The ResourceManager", "The Client"],
+          correct: 1,
+          explain: "The Dispatcher accepts submissions and launches a dedicated JobManager per job.",
+        },
+        {
+          prompt: "What is a task slot?",
+          options: [
+            "A checkpoint storage location",
+            "A fixed slice of a TaskManager's resources that runs one parallel operator instance",
+            "A queue for late events",
+            "A REST API endpoint",
+          ],
+          correct: 1,
+          explain: "Slots are the unit of resource isolation on a TaskManager, and the total slot count caps a cluster's parallelism.",
+        },
+        {
+          prompt: "If your job requests more parallel slots than the cluster currently has, what happens?",
+          options: [
+            "Flink automatically lowers your parallelism",
+            "The job fails immediately with a compile error",
+            "The job waits until enough slots are free (or errors out after a timeout)",
+            "Flink silently drops events until it fits",
+          ],
+          correct: 2,
+          explain: "Slot allocation blocks until enough are available; nothing runs at reduced parallelism without you configuring that.",
+        },
+      ],
+    };
+  </script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

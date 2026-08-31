@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>06 · Table API & Flink SQL — Flink Interactive Guide</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐿️</text></svg>" />
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">🐿️</span>
+        Flink Interactive Guide
+      </a>
+      <nav class="nav-links">
+        <a href="../index.html">Home</a>
+        <a href="01-introduction.html">Modules</a>
+        <a href="../cheatsheet.html">Cheatsheet</a>
+        <a href="../CONTRIBUTING.md">Contributing</a>
+        <a href="https://github.com/trishala23/flink-interactive-guide" target="_blank" rel="noopener">GitHub ↗</a>
+        <span class="progress-pill" data-progress-pill></span>
+      </nav>
+      <button class="nav-toggle" aria-label="Toggle menu">☰</button>
+    </div>
+  </header>
+
+  <div class="container module-layout">
+    <aside class="module-sidebar">
+      <h4>Modules</h4>
+      <ol>
+        <li><a data-module-id="introduction" href="01-introduction.html"><span class="dot"></span>01. Introduction</a></li>
+        <li><a data-module-id="architecture" href="02-architecture.html"><span class="dot"></span>02. Architecture</a></li>
+        <li><a data-module-id="datastream-api" href="03-datastream-api.html"><span class="dot"></span>03. DataStream API</a></li>
+        <li><a data-module-id="windows-time" href="04-windows-time.html"><span class="dot"></span>04. Time &amp; Windows</a></li>
+        <li><a data-module-id="state-fault-tolerance" href="05-state-fault-tolerance.html"><span class="dot"></span>05. State &amp; Fault Tolerance</a></li>
+        <li><a data-module-id="table-sql" href="06-table-sql.html"><span class="dot"></span>06. Table API &amp; SQL</a></li>
+        <li><a data-module-id="deployment" href="07-deployment.html"><span class="dot"></span>07. Deployment</a></li>
+      </ol>
+    </aside>
+
+    <main class="module-main">
+      <div class="module-kicker">Module 06</div>
+      <h1>Table API &amp; Flink SQL</h1>
+      <p class="intro">
+        Not every pipeline needs hand-written operators. The Table API and
+        Flink SQL let you describe the same streaming and batch logic
+        declaratively — and Flink's planner figures out the operator graph
+        for you.
+      </p>
+
+      <h2>The same engine, a declarative face</h2>
+      <p>
+        Flink SQL runs on the exact same runtime as the DataStream API —
+        it compiles down to operators, state, and watermarks just like the
+        code in Module 03. A streaming SQL query keeps running
+        continuously, emitting updated rows as new events arrive, the same
+        way the <code>keyBy().sum()</code> example did.
+      </p>
+
+      <pre><code>CREATE TABLE orders (
+  id INT,
+  customer STRING,
+  category STRING,
+  amount DOUBLE,
+  order_time TIMESTAMP(3),
+  WATERMARK FOR order_time AS order_time - INTERVAL '5' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'orders',
+  'format' = 'json'
+);
+
+SELECT category, SUM(amount) AS total
+FROM orders
+GROUP BY category;</code></pre>
+
+      <div class="callout">
+        The <code>WATERMARK FOR ...</code> clause is exactly the watermark
+        concept from Module 04, just expressed in SQL DDL instead of a
+        <code>WatermarkStrategy</code> object.
+      </div>
+
+      <h2>Try it: a real (tiny) query engine</h2>
+      <p>
+        Below is a genuine — if deliberately limited — SQL interpreter
+        running entirely in your browser, against a small fixed
+        <code>orders</code> table. It understands
+        <code>SELECT / FROM / WHERE / GROUP BY / ORDER BY</code> and the
+        aggregates <code>COUNT, SUM, AVG, MIN, MAX</code>. Edit the query
+        and run it, or click an example.
+      </p>
+
+      <div class="widget">
+        <div class="widget-label">Mini SQL playground</div>
+        <p style="margin-top:0; font-size: 0.82rem; color: var(--text-faint);">Table: <code>orders(id, customer, category, amount)</code> — 10 sample rows.</p>
+        <textarea id="sql-input" rows="3">SELECT category, SUM(amount) AS total, COUNT(*) AS orders
+FROM orders
+GROUP BY category
+ORDER BY total DESC</textarea>
+        <div class="controls" style="margin-top: 10px;">
+          <button class="btn btn-primary btn-sm" id="sql-run">Run query</button>
+          <button class="btn btn-secondary btn-sm" data-sql-example="SELECT * FROM orders">*</button>
+          <button class="btn btn-secondary btn-sm" data-sql-example="SELECT customer, amount FROM orders WHERE category = 'Electronics'">by category</button>
+          <button class="btn btn-secondary btn-sm" data-sql-example="SELECT customer, SUM(amount) AS total FROM orders GROUP BY customer ORDER BY total DESC">spend by customer</button>
+          <button class="btn btn-secondary btn-sm" data-sql-example="SELECT COUNT(*) AS big_orders FROM orders WHERE amount > 100">count &gt; 100</button>
+        </div>
+        <div class="result-box" id="sql-status" style="display:none;"></div>
+        <div id="sql-output" style="margin-top: 12px;"></div>
+      </div>
+
+      <h2>Table API: the programmatic equivalent</h2>
+      <p>The same query, written fluently instead of as a SQL string:</p>
+      <pre><code>Table result = tableEnv.from("orders")
+    .groupBy($("category"))
+    .select($("category"), $("amount").sum().as("total"));</code></pre>
+      <p>
+        Table API and SQL are interchangeable — you can freely mix both
+        with each other and with the DataStream API in the same job.
+      </p>
+
+      <div id="quiz-root" data-module-id="table-sql"></div>
+
+      <nav class="module-pager">
+        <a class="pager-link prev" href="05-state-fault-tolerance.html">
+          <span class="dir">← Previous</span>
+          <span class="title">05. State &amp; Fault Tolerance</span>
+        </a>
+        <a class="pager-link next" href="07-deployment.html">
+          <span class="dir">Next</span>
+          <span class="title">07. Deployment &amp; Operations →</span>
+        </a>
+      </nav>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>Flink Interactive Guide — <a href="../index.html">back to overview</a></p>
+    </div>
+  </footer>
+
+  <script src="../assets/js/app.js"></script>
+  <script src="../assets/js/sql-playground.js"></script>
+  <script>
+    window.QUIZ_DATA = {
+      title: "Check your understanding",
+      questions: [
+        {
+          prompt: "How does a Flink SQL streaming query behave compared to a traditional database query?",
+          options: [
+            "It runs once and returns a fixed result set",
+            "It keeps running continuously, emitting updated results as new events arrive",
+            "It requires the stream to end before returning anything",
+            "It only works on batch tables",
+          ],
+          correct: 1,
+          explain: "A streaming SQL query compiles to the same continuously-running operators as the DataStream API — results update as data flows in.",
+        },
+        {
+          prompt: "What does a WATERMARK FOR clause in a CREATE TABLE statement correspond to?",
+          options: [
+            "A SQL comment with no runtime effect",
+            "The watermarking concept from Module 04, expressed in DDL",
+            "A table index for faster queries",
+            "A checkpoint interval setting",
+          ],
+          correct: 1,
+          explain: "It's the same bounded-out-of-orderness watermark strategy, just declared as part of the table's schema instead of Java/Python code.",
+        },
+        {
+          prompt: "Can the Table API and DataStream API be mixed in the same job?",
+          options: [
+            "No, you must pick one for the entire job",
+            "Yes — they run on the same engine and can be freely combined",
+            "Only if the job is batch, not streaming",
+            "Only using external connectors",
+          ],
+          correct: 1,
+          explain: "Both APIs compile to the same underlying operators, so converting between a Table and a DataStream mid-pipeline is a normal pattern.",
+        },
+      ],
+    };
+  </script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>05 · State & Fault Tolerance — Flink Interactive Guide</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐿️</text></svg>" />
+  <link rel="stylesheet" href="../assets/css/style.css" />
+  <style>
+    .sub-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 16px 0; }
+    .sub-box { background: var(--bg-elevated-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px; text-align: center; }
+    .sub-box h4 { margin: 0 0 10px; font-size: 0.8rem; color: var(--text-faint); font-weight: 600; }
+    .sub-live { font-size: 1.7rem; font-weight: 800; color: var(--text); font-family: var(--mono); }
+    .sub-ckpt { font-size: 0.75rem; color: var(--text-faint); margin-top: 6px; }
+    .sub-box.recovering .sub-live { color: var(--warn); }
+    #ft-log { max-height: 140px; overflow-y: auto; font-family: var(--mono); font-size: 0.78rem; color: var(--text-faint); margin-top: 14px; border-top: 1px solid var(--border); padding-top: 10px; }
+    #ft-log div { margin-bottom: 4px; }
+    #ft-log div.ckpt { color: var(--accent); }
+    #ft-log div.fail { color: var(--danger); }
+    #ft-log div.recover { color: var(--success); }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">🐿️</span>
+        Flink Interactive Guide
+      </a>
+      <nav class="nav-links">
+        <a href="../index.html">Home</a>
+        <a href="01-introduction.html">Modules</a>
+        <a href="../cheatsheet.html">Cheatsheet</a>
+        <a href="../CONTRIBUTING.md">Contributing</a>
+        <a href="https://github.com/trishala23/flink-interactive-guide" target="_blank" rel="noopener">GitHub ↗</a>
+        <span class="progress-pill" data-progress-pill></span>
+      </nav>
+      <button class="nav-toggle" aria-label="Toggle menu">☰</button>
+    </div>
+  </header>
+
+  <div class="container module-layout">
+    <aside class="module-sidebar">
+      <h4>Modules</h4>
+      <ol>
+        <li><a data-module-id="introduction" href="01-introduction.html"><span class="dot"></span>01. Introduction</a></li>
+        <li><a data-module-id="architecture" href="02-architecture.html"><span class="dot"></span>02. Architecture</a></li>
+        <li><a data-module-id="datastream-api" href="03-datastream-api.html"><span class="dot"></span>03. DataStream API</a></li>
+        <li><a data-module-id="windows-time" href="04-windows-time.html"><span class="dot"></span>04. Time &amp; Windows</a></li>
+        <li><a data-module-id="state-fault-tolerance" href="05-state-fault-tolerance.html"><span class="dot"></span>05. State &amp; Fault Tolerance</a></li>
+        <li><a data-module-id="table-sql" href="06-table-sql.html"><span class="dot"></span>06. Table API &amp; SQL</a></li>
+        <li><a data-module-id="deployment" href="07-deployment.html"><span class="dot"></span>07. Deployment</a></li>
+      </ol>
+    </aside>
+
+    <main class="module-main">
+      <div class="module-kicker">Module 05</div>
+      <h1>State &amp; Fault Tolerance</h1>
+      <p class="intro">
+        Flink jobs run for weeks or months, and machines fail during that
+        time. State and checkpointing are what let a job pick up exactly
+        where it left off — without losing or double-counting a single
+        event.
+      </p>
+
+      <h2>Two kinds of state</h2>
+      <ul>
+        <li><strong>Keyed state</strong> — scoped to the current key on a keyed stream (<code>ValueState</code>, <code>ListState</code>, <code>MapState</code>). Used by almost every stateful operator: running counts, sessions, dedup sets.</li>
+        <li><strong>Operator state</strong> — scoped to a parallel operator instance rather than a key. Used for things like source offsets (e.g. a Kafka consumer's per-partition read position).</li>
+      </ul>
+
+      <h2>Checkpoints: the safety net</h2>
+      <p>
+        Periodically, the JobManager injects a <strong>checkpoint
+        barrier</strong> into the stream. As it flows through the graph,
+        every operator snapshots its state to durable storage the moment
+        the barrier passes. Once every operator has confirmed its
+        snapshot, the checkpoint is complete — a consistent, whole-pipeline
+        point-in-time you can recover from.
+      </p>
+      <p>
+        On failure, Flink restarts the affected operators from the
+        <strong>latest completed checkpoint</strong> and replays source
+        data from the recorded offsets. Combined with a replayable source
+        (like Kafka) and transactional sinks, this is what gives Flink its
+        <strong>exactly-once</strong> guarantee.
+      </p>
+
+      <div class="callout">
+        <strong>Checkpoints vs. savepoints:</strong> a checkpoint is
+        automatic, lightweight, and managed by Flink for failure recovery.
+        A <strong>savepoint</strong> is a manually triggered, portable
+        snapshot you use for planned operations — upgrading your job code,
+        changing parallelism, or migrating clusters — and then resume from.
+      </div>
+
+      <h2>Try it: simulate a failure</h2>
+      <p>
+        Three parallel subtasks each track a running count (their keyed
+        state). The stream periodically checkpoints. Kill the job mid-flight
+        and watch it recover from the last checkpoint — not from zero, and
+        not by losing the snapshot.
+      </p>
+
+      <div class="widget">
+        <div class="widget-label">Checkpoint &amp; recovery simulator</div>
+        <div class="sub-grid" id="ft-subs">
+          <div class="sub-box" data-sub="0"><h4>Subtask 0</h4><div class="sub-live">0</div><div class="sub-ckpt">checkpoint: 0</div></div>
+          <div class="sub-box" data-sub="1"><h4>Subtask 1</h4><div class="sub-live">0</div><div class="sub-ckpt">checkpoint: 0</div></div>
+          <div class="sub-box" data-sub="2"><h4>Subtask 2</h4><div class="sub-live">0</div><div class="sub-ckpt">checkpoint: 0</div></div>
+        </div>
+        <div class="controls">
+          <button class="btn btn-primary btn-sm" id="ft-start">▶ Start stream</button>
+          <button class="btn btn-secondary btn-sm" id="ft-fail">💥 Simulate failure</button>
+          <button class="btn btn-secondary btn-sm" id="ft-reset">↺ Reset</button>
+        </div>
+        <div id="ft-log"></div>
+      </div>
+
+      <h2>State backends, briefly</h2>
+      <p>
+        State lives in a <strong>state backend</strong> while the job runs.
+        The <code>HashMapStateBackend</code> keeps state as objects on the
+        JVM heap (fast, but limited by memory); <code>EmbeddedRocksDBStateBackend</code>
+        keeps state on local disk via RocksDB, spilling far beyond memory —
+        the usual choice for very large state. Both checkpoint to a durable
+        remote store (e.g. S3 or HDFS) regardless of which backend you pick.
+      </p>
+
+      <div id="quiz-root" data-module-id="state-fault-tolerance"></div>
+
+      <nav class="module-pager">
+        <a class="pager-link prev" href="04-windows-time.html">
+          <span class="dir">← Previous</span>
+          <span class="title">04. Time &amp; Windows</span>
+        </a>
+        <a class="pager-link next" href="06-table-sql.html">
+          <span class="dir">Next</span>
+          <span class="title">06. Table API &amp; Flink SQL →</span>
+        </a>
+      </nav>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>Flink Interactive Guide — <a href="../index.html">back to overview</a></p>
+    </div>
+  </footer>
+
+  <script src="../assets/js/app.js"></script>
+  <script>
+    (function () {
+      const N = 3;
+      let live = [0, 0, 0];
+      let checkpoint = [0, 0, 0];
+      let checkpointNum = 0;
+      let streamTimer = null;
+      let ckptTimer = null;
+      let running = false;
+      let recovering = false;
+
+      const boxes = Array.from(document.querySelectorAll(".sub-box"));
+      const log = document.getElementById("ft-log");
+      const startBtn = document.getElementById("ft-start");
+      const failBtn = document.getElementById("ft-fail");
+      const resetBtn = document.getElementById("ft-reset");
+
+      function logLine(text, cls) {
+        const div = document.createElement("div");
+        if (cls) div.className = cls;
+        div.textContent = text;
+        log.appendChild(div);
+        log.scrollTop = log.scrollHeight;
+      }
+
+      function render() {
+        boxes.forEach((box, i) => {
+          box.classList.toggle("recovering", recovering);
+          box.querySelector(".sub-live").textContent = recovering ? "…" : live[i];
+          box.querySelector(".sub-ckpt").textContent = `checkpoint: ${checkpoint[i]}`;
+        });
+      }
+
+      function tickEvent() {
+        const sub = Math.floor(Math.random() * N);
+        live[sub]++;
+        render();
+      }
+
+      function tickCheckpoint() {
+        checkpointNum++;
+        checkpoint = [...live];
+        render();
+        logLine(`✓ Checkpoint #${checkpointNum} completed — snapshot: [${checkpoint.join(", ")}]`, "ckpt");
+      }
+
+      function start() {
+        if (running) return;
+        running = true;
+        startBtn.textContent = "⏸ Pause stream";
+        streamTimer = setInterval(tickEvent, 500);
+        ckptTimer = setInterval(tickCheckpoint, 3500);
+        logLine("▶ Stream started.");
+      }
+
+      function pause() {
+        running = false;
+        startBtn.textContent = "▶ Start stream";
+        clearInterval(streamTimer);
+        clearInterval(ckptTimer);
+      }
+
+      startBtn.addEventListener("click", () => (running ? pause() : start()));
+
+      failBtn.addEventListener("click", () => {
+        if (recovering) return;
+        const wasRunning = running;
+        pause();
+        recovering = true;
+        render();
+        logLine("💥 Job failed! In-flight state since the last checkpoint is lost.", "fail");
+        setTimeout(() => {
+          live = [...checkpoint];
+          recovering = false;
+          render();
+          logLine(`↺ Recovered from checkpoint #${checkpointNum} — state restored to [${checkpoint.join(", ")}]. Source replays from the recorded offset, so no event is skipped or double-counted once caught up.`, "recover");
+          if (wasRunning) start();
+        }, 1400);
+      });
+
+      resetBtn.addEventListener("click", () => {
+        pause();
+        live = [0, 0, 0];
+        checkpoint = [0, 0, 0];
+        checkpointNum = 0;
+        recovering = false;
+        render();
+        log.innerHTML = "";
+        logLine("Demo reset.");
+      });
+
+      render();
+    })();
+
+    window.QUIZ_DATA = {
+      title: "Check your understanding",
+      questions: [
+        {
+          prompt: "What's the difference between keyed state and operator state?",
+          options: [
+            "Keyed state is scoped per key; operator state is scoped per parallel operator instance",
+            "They are the same thing with different names",
+            "Operator state is only used for windows",
+            "Keyed state cannot be checkpointed",
+          ],
+          correct: 0,
+          explain: "Keyed state (ValueState, ListState, MapState) tracks per-key data; operator state tracks data per parallel instance, like Kafka source offsets.",
+        },
+        {
+          prompt: "What triggers a checkpoint in Flink?",
+          options: [
+            "A user manually clicking a button before every restart",
+            "The JobManager injecting a checkpoint barrier that flows through the pipeline",
+            "Each TaskManager checkpointing independently on its own schedule",
+            "A checkpoint only happens once, at job startup",
+          ],
+          correct: 1,
+          explain: "Checkpoint barriers flow with the data; when every operator has snapshotted after the barrier passes, the checkpoint is complete.",
+        },
+        {
+          prompt: "How does a savepoint differ from a checkpoint?",
+          options: [
+            "A savepoint is automatic and continuous; a checkpoint is manual",
+            "There's no real difference",
+            "A savepoint is a manually triggered, portable snapshot for planned operations like upgrades; checkpoints are automatic and used for failure recovery",
+            "Savepoints only work with RocksDB",
+          ],
+          correct: 2,
+          explain: "Savepoints are for deliberate operations (upgrades, rescaling, migration); checkpoints are Flink's ongoing automatic safety net.",
+        },
+        {
+          prompt: "Why does EmbeddedRocksDBStateBackend matter for very large state?",
+          options: [
+            "It keeps all state in the JobManager's memory",
+            "It spills state to local disk, going far beyond what fits in JVM heap",
+            "It disables checkpointing for performance",
+            "It only works for batch jobs",
+          ],
+          correct: 1,
+          explain: "RocksDB-backed state lives on local disk, so it can scale well past available heap — the usual choice for jobs with large keyed state.",
+        },
+      ],
+    };
+  </script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

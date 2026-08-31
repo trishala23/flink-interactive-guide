@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>07 · Deployment & Operations — Flink Interactive Guide</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐿️</text></svg>" />
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">🐿️</span>
+        Flink Interactive Guide
+      </a>
+      <nav class="nav-links">
+        <a href="../index.html">Home</a>
+        <a href="01-introduction.html">Modules</a>
+        <a href="../cheatsheet.html">Cheatsheet</a>
+        <a href="../CONTRIBUTING.md">Contributing</a>
+        <a href="https://github.com/trishala23/flink-interactive-guide" target="_blank" rel="noopener">GitHub ↗</a>
+        <span class="progress-pill" data-progress-pill></span>
+      </nav>
+      <button class="nav-toggle" aria-label="Toggle menu">☰</button>
+    </div>
+  </header>
+
+  <div class="container module-layout">
+    <aside class="module-sidebar">
+      <h4>Modules</h4>
+      <ol>
+        <li><a data-module-id="introduction" href="01-introduction.html"><span class="dot"></span>01. Introduction</a></li>
+        <li><a data-module-id="architecture" href="02-architecture.html"><span class="dot"></span>02. Architecture</a></li>
+        <li><a data-module-id="datastream-api" href="03-datastream-api.html"><span class="dot"></span>03. DataStream API</a></li>
+        <li><a data-module-id="windows-time" href="04-windows-time.html"><span class="dot"></span>04. Time &amp; Windows</a></li>
+        <li><a data-module-id="state-fault-tolerance" href="05-state-fault-tolerance.html"><span class="dot"></span>05. State &amp; Fault Tolerance</a></li>
+        <li><a data-module-id="table-sql" href="06-table-sql.html"><span class="dot"></span>06. Table API &amp; SQL</a></li>
+        <li><a data-module-id="deployment" href="07-deployment.html"><span class="dot"></span>07. Deployment</a></li>
+      </ol>
+    </aside>
+
+    <main class="module-main">
+      <div class="module-kicker">Module 07</div>
+      <h1>Deployment &amp; Operations</h1>
+      <p class="intro">
+        The same job can run in very different environments. Picking the
+        right one is mostly about who owns the cluster's lifecycle and how
+        much isolation your jobs need from each other.
+      </p>
+
+      <h2>Cluster lifecycles</h2>
+      <ul>
+        <li><strong>Session cluster</strong> — one long-lived cluster accepts many jobs over time. Efficient (shared resources, fast job startup) but jobs share fate: a JobManager crash can affect the whole session.</li>
+        <li><strong>Application cluster</strong> — a cluster is started for exactly one application/job and torn down when it finishes. Better isolation, the standard recommendation on Kubernetes.</li>
+        <li><strong>Per-job cluster</strong> — similar idea, submitted from a client rather than the image itself; deprecated on some resource managers in favor of application mode.</li>
+      </ul>
+
+      <h2>Where it runs</h2>
+      <table>
+        <thead><tr><th>Target</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Standalone</strong></td><td>You run JobManager/TaskManager processes yourself. No resource manager integration — full control, more manual ops.</td></tr>
+          <tr><td><strong>Kubernetes</strong></td><td>Native Kubernetes deployment (recommended) or via the Flink Kubernetes Operator for lifecycle management, upgrades, and savepoint-based rescaling.</td></tr>
+          <tr><td><strong>YARN</strong></td><td>Common in existing Hadoop ecosystems; Flink requests containers from YARN's ResourceManager.</td></tr>
+          <tr><td><strong>Managed services</strong></td><td>e.g. Amazon Managed Service for Apache Flink, Ververica Platform — someone else runs the cluster; you submit jobs.</td></tr>
+        </tbody>
+      </table>
+
+      <h2>Try it: which deployment mode?</h2>
+      <div class="widget">
+        <div class="widget-label">Deployment wizard</div>
+        <div id="dep-wizard"></div>
+      </div>
+
+      <h2>Scaling and upgrades</h2>
+      <p>
+        To change parallelism or deploy new job code without losing state,
+        take a <strong>savepoint</strong> (Module 05), stop the job, then
+        restart it from that savepoint with the new parallelism or JAR.
+        The Flink Kubernetes Operator and tools like the Application Mode
+        upgrade flow automate this sequence.
+      </p>
+
+      <h2>Watching a running job</h2>
+      <p>
+        The <strong>Flink Web UI</strong> (served by the Dispatcher) shows
+        running/completed jobs, the operator graph, backpressure, and
+        checkpoint history. For long-term monitoring, Flink's metrics
+        system exports to Prometheus, Datadog, Graphite, and others — the
+        key metrics to alert on are checkpoint duration/failure rate,
+        consumer lag, and backpressure.
+      </p>
+
+      <div id="quiz-root" data-module-id="deployment"></div>
+
+      <nav class="module-pager">
+        <a class="pager-link prev" href="06-table-sql.html">
+          <span class="dir">← Previous</span>
+          <span class="title">06. Table API &amp; Flink SQL</span>
+        </a>
+        <a class="pager-link next" href="../cheatsheet.html">
+          <span class="dir">Next</span>
+          <span class="title">Cheatsheet →</span>
+        </a>
+      </nav>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>Flink Interactive Guide — <a href="../index.html">back to overview</a></p>
+    </div>
+  </footer>
+
+  <script src="../assets/js/app.js"></script>
+  <script>
+    (function () {
+      const tree = {
+        start: {
+          question: "Where do you want Flink to run?",
+          options: [
+            { label: "Kubernetes", next: "k8s-shared" },
+            { label: "An existing YARN/Hadoop cluster", next: "yarn" },
+            { label: "Just my laptop, for learning or dev", next: "standalone" },
+            { label: "I don't want to run infrastructure at all", next: "managed" },
+          ],
+        },
+        "k8s-shared": {
+          question: "Will multiple teams or jobs share one always-on cluster?",
+          options: [
+            { label: "Yes — shared, always-on", next: "session-k8s" },
+            { label: "No — one cluster per job", next: "app-k8s" },
+          ],
+        },
+      };
+
+      const results = {
+        yarn: {
+          title: "Session or per-job cluster on YARN",
+          body: "You already have YARN — Flink can request containers from its ResourceManager directly. Use a session cluster if several jobs will share it, or a dedicated per-job submission for stronger isolation.",
+        },
+        standalone: {
+          title: "Standalone mode (or a local MiniCluster)",
+          body: "For learning, local development, or a single fixed-size cluster with no external resource manager, standalone mode is the simplest path — you run JobManager/TaskManager processes yourself.",
+        },
+        managed: {
+          title: "A managed Flink service",
+          body: "Services like Amazon Managed Service for Apache Flink or Ververica Platform run the cluster for you — you submit jobs and manage application logic, not infrastructure.",
+        },
+        "session-k8s": {
+          title: "Kubernetes session cluster",
+          body: "One long-lived cluster on Kubernetes accepts multiple jobs, minimizing per-job startup overhead. Trade-off: jobs share the same JobManager, so isolation between jobs is weaker than application mode.",
+        },
+        "app-k8s": {
+          title: "Kubernetes application cluster (recommended default)",
+          body: "A dedicated cluster is created per job/application and torn down when it's done — the strongest isolation, and Flink's own recommended default on Kubernetes, especially via the Flink Kubernetes Operator.",
+        },
+      };
+
+      const root = document.getElementById("dep-wizard");
+      const history = [];
+      let current = "start";
+
+      function renderQuestion(nodeKey) {
+        const node = tree[nodeKey];
+        root.innerHTML = "";
+
+        const p = document.createElement("p");
+        p.style.margin = "0 0 12px";
+        p.style.color = "var(--text)";
+        p.style.fontWeight = "600";
+        p.textContent = node.question;
+        root.appendChild(p);
+
+        const btnWrap = document.createElement("div");
+        btnWrap.className = "controls";
+        node.options.forEach((opt) => {
+          const btn = document.createElement("button");
+          btn.className = "btn btn-secondary btn-sm";
+          btn.textContent = opt.label;
+          btn.addEventListener("click", () => {
+            history.push(nodeKey);
+            current = opt.next;
+            render();
+          });
+          btnWrap.appendChild(btn);
+        });
+        root.appendChild(btnWrap);
+
+        if (history.length > 0) {
+          const back = document.createElement("button");
+          back.className = "btn btn-secondary btn-sm";
+          back.style.marginTop = "10px";
+          back.textContent = "← Back";
+          back.addEventListener("click", () => {
+            current = history.pop();
+            render();
+          });
+          root.appendChild(back);
+        }
+      }
+
+      function renderResult(key) {
+        const r = results[key];
+        root.innerHTML = "";
+        const box = document.createElement("div");
+        box.className = "result-box ok";
+        box.innerHTML = `<strong>${r.title}</strong><br/>${r.body}`;
+        root.appendChild(box);
+
+        const restart = document.createElement("button");
+        restart.className = "btn btn-secondary btn-sm";
+        restart.style.marginTop = "12px";
+        restart.textContent = "↺ Start over";
+        restart.addEventListener("click", () => {
+          history.length = 0;
+          current = "start";
+          render();
+        });
+        root.appendChild(restart);
+      }
+
+      function render() {
+        if (tree[current]) renderQuestion(current);
+        else renderResult(current);
+      }
+
+      render();
+    })();
+
+    window.QUIZ_DATA = {
+      title: "Check your understanding",
+      questions: [
+        {
+          prompt: "What's the main trade-off of a session cluster vs. an application cluster?",
+          options: [
+            "Session clusters are always faster",
+            "Session clusters share resources across jobs (efficient) but with weaker isolation; application clusters isolate per job but start a cluster each time",
+            "There is no trade-off, they're identical",
+            "Application clusters cannot run on Kubernetes",
+          ],
+          correct: 1,
+          explain: "Session mode amortizes cluster startup across many jobs; application mode trades that efficiency for stronger per-job isolation.",
+        },
+        {
+          prompt: "How do you change a running job's parallelism without losing its state?",
+          options: [
+            "Just restart the job — state carries over automatically",
+            "Take a savepoint, stop the job, and restart from that savepoint with the new parallelism",
+            "It's not possible to change parallelism",
+            "Delete and recreate the Kafka topic",
+          ],
+          correct: 1,
+          explain: "A savepoint is a portable, complete state snapshot designed for exactly this kind of planned operation.",
+        },
+        {
+          prompt: "What does the Flink Web UI let you inspect?",
+          options: [
+            "Only the source code of the job",
+            "Running/completed jobs, the operator graph, backpressure, and checkpoint history",
+            "Kubernetes cluster billing",
+            "Nothing at runtime — it's a static docs page",
+          ],
+          correct: 1,
+          explain: "The Web UI, served by the Dispatcher, is the primary at-a-glance operational view of a cluster and its jobs.",
+        },
+      ],
+    };
+  </script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

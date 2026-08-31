@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>03 · The DataStream API — Flink Interactive Guide</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐿️</text></svg>" />
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">🐿️</span>
+        Flink Interactive Guide
+      </a>
+      <nav class="nav-links">
+        <a href="../index.html">Home</a>
+        <a href="01-introduction.html">Modules</a>
+        <a href="../cheatsheet.html">Cheatsheet</a>
+        <a href="../CONTRIBUTING.md">Contributing</a>
+        <a href="https://github.com/trishala23/flink-interactive-guide" target="_blank" rel="noopener">GitHub ↗</a>
+        <span class="progress-pill" data-progress-pill></span>
+      </nav>
+      <button class="nav-toggle" aria-label="Toggle menu">☰</button>
+    </div>
+  </header>
+
+  <div class="container module-layout">
+    <aside class="module-sidebar">
+      <h4>Modules</h4>
+      <ol>
+        <li><a data-module-id="introduction" href="01-introduction.html"><span class="dot"></span>01. Introduction</a></li>
+        <li><a data-module-id="architecture" href="02-architecture.html"><span class="dot"></span>02. Architecture</a></li>
+        <li><a data-module-id="datastream-api" href="03-datastream-api.html"><span class="dot"></span>03. DataStream API</a></li>
+        <li><a data-module-id="windows-time" href="04-windows-time.html"><span class="dot"></span>04. Time &amp; Windows</a></li>
+        <li><a data-module-id="state-fault-tolerance" href="05-state-fault-tolerance.html"><span class="dot"></span>05. State &amp; Fault Tolerance</a></li>
+        <li><a data-module-id="table-sql" href="06-table-sql.html"><span class="dot"></span>06. Table API &amp; SQL</a></li>
+        <li><a data-module-id="deployment" href="07-deployment.html"><span class="dot"></span>07. Deployment</a></li>
+      </ol>
+    </aside>
+
+    <main class="module-main">
+      <div class="module-kicker">Module 03</div>
+      <h1>The DataStream API</h1>
+      <p class="intro">
+        The DataStream API is how you describe a pipeline in code: read
+        from a <strong>source</strong>, apply a chain of
+        <strong>transformations</strong>, write to a <strong>sink</strong>.
+      </p>
+
+      <h2>Anatomy of a pipeline</h2>
+      <div class="code-tabs">
+        <button class="code-tab active" data-target="java">Java</button>
+        <button class="code-tab" data-target="python">Python (PyFlink)</button>
+      </div>
+      <div>
+        <pre class="code-panel active" data-panel="java"><code>StreamExecutionEnvironment env =
+    StreamExecutionEnvironment.getExecutionEnvironment();
+
+DataStream&lt;String&gt; lines = env.socketTextStream("localhost", 9999);
+
+DataStream&lt;Tuple2&lt;String, Integer&gt;&gt; counts = lines
+    .flatMap((String line, Collector&lt;String&gt; out) -&gt; {
+        for (String word : line.split(" ")) out.collect(word);
+    })
+    .returns(Types.STRING)
+    .map(word -&gt; Tuple2.of(word, 1))
+    .returns(Types.TUPLE(Types.STRING, Types.INT))
+    .keyBy(t -&gt; t.f0)
+    .sum(1);
+
+counts.print();
+env.execute("word-count");</code></pre>
+        <pre class="code-panel" data-panel="python"><code>from pyflink.datastream import StreamExecutionEnvironment
+
+env = StreamExecutionEnvironment.get_execution_environment()
+lines = env.socket_text_stream("localhost", 9999)
+
+counts = (
+    lines.flat_map(lambda line: line.split(" "))
+         .map(lambda word: (word, 1))
+         .key_by(lambda t: t[0])
+         .sum(1)
+)
+
+counts.print()
+env.execute("word-count")</code></pre>
+      </div>
+
+      <h2>The core transformations</h2>
+      <table>
+        <thead><tr><th>Operator</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td><code>map</code></td><td>One input element in, exactly one output element out (a 1:1 transform).</td></tr>
+          <tr><td><code>flatMap</code></td><td>One input element in, zero or more output elements out.</td></tr>
+          <tr><td><code>filter</code></td><td>Keeps an element only if a predicate returns true.</td></tr>
+          <tr><td><code>keyBy</code></td><td>Logically partitions the stream by a key — required before most stateful operations.</td></tr>
+          <tr><td><code>sum</code> / <code>reduce</code> / <code>aggregate</code></td><td>Combines elements within a key, emitting an updated result as each new element arrives.</td></tr>
+          <tr><td><code>window</code></td><td>Groups a keyed stream into time- or count-based buckets before aggregating (Module 04).</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout">
+        <strong>Key idea:</strong> on an unbounded stream, an aggregation
+        like <code>sum</code> doesn't wait for "the end" — there isn't one.
+        It emits an <em>updated</em> result every time a new element for
+        that key arrives. That surprises people coming from batch SQL, so
+        the exercise below makes it concrete.
+      </div>
+
+      <h2>Try it: predict the output</h2>
+      <p>
+        Work through each pipeline by hand, type what you think comes out,
+        then check yourself.
+      </p>
+
+      <div class="widget">
+        <div class="widget-label">Exercise 1 — filter + map</div>
+        <pre><code>env.fromElements(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+   .filter(x -&gt; x % 2 == 0)
+   .map(x -&gt; x * 10)
+   .print();</code></pre>
+        <div class="controls">
+          <label for="ex1-input">Predicted output (comma-separated):</label>
+        </div>
+        <input type="text" id="ex1-input" placeholder="e.g. 20, 40, 60" style="width: 100%;" />
+        <div style="margin-top: 10px;">
+          <button class="btn btn-primary btn-sm" id="ex1-check">Check</button>
+        </div>
+        <div class="result-box" id="ex1-result"></div>
+      </div>
+
+      <div class="widget">
+        <div class="widget-label">Exercise 2 — keyBy + sum (running totals!)</div>
+        <pre><code>env.fromElements("a", "b", "a", "c", "b", "a")
+   .map(w -&gt; Tuple2.of(w, 1))
+   .keyBy(t -&gt; t.f0)
+   .sum(1)
+   .print();</code></pre>
+        <p style="font-size: 0.85rem; color: var(--text-faint); margin: -6px 0 12px;">
+          Remember: <code>sum</code> on a keyed stream emits one updated
+          tuple per input element — not a single final answer.
+        </p>
+        <div class="controls">
+          <label for="ex2-input">Predicted output, in order (e.g. (a,1), (b,1), ...):</label>
+        </div>
+        <input type="text" id="ex2-input" placeholder="(a,1), (b,1), (a,2), ..." style="width: 100%;" />
+        <div style="margin-top: 10px;">
+          <button class="btn btn-primary btn-sm" id="ex2-check">Check</button>
+        </div>
+        <div class="result-box" id="ex2-result"></div>
+      </div>
+
+      <div id="quiz-root" data-module-id="datastream-api"></div>
+
+      <nav class="module-pager">
+        <a class="pager-link prev" href="02-architecture.html">
+          <span class="dir">← Previous</span>
+          <span class="title">02. Architecture &amp; Runtime</span>
+        </a>
+        <a class="pager-link next" href="04-windows-time.html">
+          <span class="dir">Next</span>
+          <span class="title">04. Time &amp; Windows →</span>
+        </a>
+      </nav>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>Flink Interactive Guide — <a href="../index.html">back to overview</a></p>
+    </div>
+  </footer>
+
+  <script src="../assets/js/app.js"></script>
+  <script>
+    // Exercise 1: filter + map, computed for real so the "answer key" can't drift from the code shown.
+    (function () {
+      const source = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+      const expected = source.filter((x) => x % 2 === 0).map((x) => x * 10);
+
+      document.getElementById("ex1-check").addEventListener("click", () => {
+        const box = document.getElementById("ex1-result");
+        const raw = document.getElementById("ex1-input").value;
+        const given = raw.split(",").map((s) => s.trim()).filter(Boolean).map(Number);
+        const ok = given.length === expected.length && given.every((v, i) => v === expected[i]);
+        box.textContent = ok
+          ? `✓ Correct: [${expected.join(", ")}]`
+          : `✗ Not quite. Expected: [${expected.join(", ")}]`;
+        box.className = "result-box " + (ok ? "ok" : "err");
+      });
+    })();
+
+    // Exercise 2: keyBy + sum, emitting one updated tuple per input element.
+    (function () {
+      const source = ["a", "b", "a", "c", "b", "a"];
+      const running = {};
+      const expected = source.map((w) => {
+        running[w] = (running[w] || 0) + 1;
+        return `(${w},${running[w]})`;
+      });
+
+      document.getElementById("ex2-check").addEventListener("click", () => {
+        const box = document.getElementById("ex2-result");
+        const raw = document.getElementById("ex2-input").value;
+        // Split on "), (" boundaries so "(a,1), (b,1)" -> ["(a,1)", "(b,1)"]
+        const given = raw
+          .split(/\)\s*,\s*\(/)
+          .map((s, i, arr) => {
+            let t = s.trim();
+            if (i !== 0) t = "(" + t;
+            if (i !== arr.length - 1) t = t + ")";
+            return t.replace(/\s+/g, "");
+          })
+          .filter(Boolean);
+        const ok = given.length === expected.length && given.every((v, i) => v === expected[i]);
+        box.textContent = ok
+          ? `✓ Correct: ${expected.join(", ")}`
+          : `✗ Not quite. Expected: ${expected.join(", ")}`;
+        box.className = "result-box " + (ok ? "ok" : "err");
+      });
+    })();
+
+    window.QUIZ_DATA = {
+      title: "Check your understanding",
+      questions: [
+        {
+          prompt: "What's the difference between map and flatMap?",
+          options: [
+            "map is for numbers, flatMap is for strings",
+            "map produces exactly one output per input; flatMap can produce zero, one, or many",
+            "flatMap is only available in Python",
+            "There is no difference",
+          ],
+          correct: 1,
+          explain: "map is a strict 1:1 transform; flatMap lets you emit any number of output elements per input, which is why tokenizing a line into words uses flatMap.",
+        },
+        {
+          prompt: "Why must you call keyBy before sum or reduce?",
+          options: [
+            "It's just a style convention",
+            "sum/reduce need a key to know which elements belong to the same running aggregate",
+            "keyBy sorts the stream",
+            "It isn't required — sum works on any stream",
+          ],
+          correct: 1,
+          explain: "Stateful aggregations are scoped per key; keyBy partitions the stream so each key's state is tracked independently.",
+        },
+        {
+          prompt: "On an unbounded stream, when does a keyed sum() emit a result?",
+          options: [
+            "Only once, at the end of the stream",
+            "Once per minute regardless of input",
+            "Every time a new element for that key arrives, as an updated running total",
+            "Only when you call print()",
+          ],
+          correct: 2,
+          explain: "There's no 'end' to wait for on an unbounded stream, so sum emits an updated value on every relevant input — as exercise 2 shows.",
+        },
+      ],
+    };
+  </script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>04 · Time & Windows — Flink Interactive Guide</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐿️</text></svg>" />
+  <link rel="stylesheet" href="../assets/css/style.css" />
+  <style>
+    #wt-timeline { position: relative; height: 220px; margin-top: 18px; }
+    .wt-axis { position: absolute; left: 0; right: 0; bottom: 34px; height: 1px; background: var(--border); }
+    .wt-tick { position: absolute; bottom: 12px; font-size: 0.7rem; color: var(--text-faint); transform: translateX(-50%); }
+    .wt-event { position: absolute; bottom: 30px; width: 9px; height: 9px; border-radius: 50%; background: var(--accent-2); transform: translateX(-50%); }
+    .wt-window { position: absolute; height: 20px; border-radius: 5px; font-size: 0.68rem; color: #06090f; display: flex; align-items: center; padding-left: 6px; white-space: nowrap; overflow: hidden; opacity: 0.92; }
+    .wt-window-label { position: absolute; top: -18px; left: 0; font-size: 0.65rem; color: var(--text-faint); }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">🐿️</span>
+        Flink Interactive Guide
+      </a>
+      <nav class="nav-links">
+        <a href="../index.html">Home</a>
+        <a href="01-introduction.html">Modules</a>
+        <a href="../cheatsheet.html">Cheatsheet</a>
+        <a href="../CONTRIBUTING.md">Contributing</a>
+        <a href="https://github.com/trishala23/flink-interactive-guide" target="_blank" rel="noopener">GitHub ↗</a>
+        <span class="progress-pill" data-progress-pill></span>
+      </nav>
+      <button class="nav-toggle" aria-label="Toggle menu">☰</button>
+    </div>
+  </header>
+
+  <div class="container module-layout">
+    <aside class="module-sidebar">
+      <h4>Modules</h4>
+      <ol>
+        <li><a data-module-id="introduction" href="01-introduction.html"><span class="dot"></span>01. Introduction</a></li>
+        <li><a data-module-id="architecture" href="02-architecture.html"><span class="dot"></span>02. Architecture</a></li>
+        <li><a data-module-id="datastream-api" href="03-datastream-api.html"><span class="dot"></span>03. DataStream API</a></li>
+        <li><a data-module-id="windows-time" href="04-windows-time.html"><span class="dot"></span>04. Time &amp; Windows</a></li>
+        <li><a data-module-id="state-fault-tolerance" href="05-state-fault-tolerance.html"><span class="dot"></span>05. State &amp; Fault Tolerance</a></li>
+        <li><a data-module-id="table-sql" href="06-table-sql.html"><span class="dot"></span>06. Table API &amp; SQL</a></li>
+        <li><a data-module-id="deployment" href="07-deployment.html"><span class="dot"></span>07. Deployment</a></li>
+      </ol>
+    </aside>
+
+    <main class="module-main">
+      <div class="module-kicker">Module 04</div>
+      <h1>Time &amp; Windows</h1>
+      <p class="intro">
+        Streams are unbounded, so aggregations need a way to carve them
+        into finite chunks. That's what windows do — and knowing which
+        clock you're measuring against is what makes windows behave
+        correctly.
+      </p>
+
+      <h2>Three notions of time</h2>
+      <table>
+        <thead><tr><th>Time</th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Event time</strong></td><td>When the event actually happened, per a timestamp in the data itself. Correct even if events arrive late or out of order.</td></tr>
+          <tr><td><strong>Ingestion time</strong></td><td>When the event entered Flink. A middle ground — stable, but not the true origin time.</td></tr>
+          <tr><td><strong>Processing time</strong></td><td>The system clock of the machine doing the processing, at the moment it processes the event. Simplest and fastest, but not reproducible.</td></tr>
+        </tbody>
+      </table>
+      <p>Most real applications use <strong>event time</strong>, because network delays and retries mean "when it arrived" is not "when it happened."</p>
+
+      <h2>Watermarks: how Flink knows "we're caught up"</h2>
+      <p>
+        With event time, Flink can't just wait for a window to "run out" —
+        events for it might still be in flight. A <strong>watermark</strong>
+        is a moving marker in the stream: watermark <code>W</code> asserts
+        "no more events with timestamp &lt; W should arrive." When the
+        watermark passes a window's end, that window fires. Events that
+        still arrive after that (later than the watermark allowed for) are
+        <strong>late</strong>.
+      </p>
+
+      <div class="widget">
+        <div class="widget-label">Watermark walkthrough</div>
+        <p style="margin-top:0; font-size:0.88rem; color:var(--text-dim);">
+          Bounded out-of-orderness watermark, allowing events up to
+          <strong>2s</strong> out of order: <code>watermark = maxEventTimeSeen − 2</code>.
+          Step through events as they <em>arrive</em> (not necessarily in event-time order).
+        </p>
+        <button class="btn btn-secondary btn-sm" id="wm-next">Next event →</button>
+        <button class="btn btn-secondary btn-sm" id="wm-reset">Reset</button>
+        <table style="margin-top:14px;">
+          <thead><tr><th>#</th><th>Event time</th><th>Watermark after</th><th>Status</th></tr></thead>
+          <tbody id="wm-body"></tbody>
+        </table>
+      </div>
+
+      <h2>Window types</h2>
+      <ul>
+        <li><strong>Tumbling</strong> — fixed-size, non-overlapping, back-to-back. Every event belongs to exactly one window.</li>
+        <li><strong>Sliding</strong> — fixed-size, but a new window starts every "slide" interval, so windows overlap and an event can belong to several.</li>
+        <li><strong>Session</strong> — no fixed size; a window closes after a gap of inactivity, so it captures bursts of activity.</li>
+      </ul>
+
+      <div class="widget">
+        <div class="widget-label">Interactive window visualizer</div>
+        <div class="controls">
+          <label>Type:
+            <select id="wt-type">
+              <option value="tumbling">Tumbling</option>
+              <option value="sliding">Sliding</option>
+              <option value="session">Session</option>
+            </select>
+          </label>
+          <label id="wt-size-label">Window size (s):
+            <input type="number" id="wt-size" value="10" min="2" max="30" style="width: 60px;" />
+          </label>
+          <label id="wt-slide-label" style="display:none;">Slide (s):
+            <input type="number" id="wt-slide" value="5" min="1" max="30" style="width: 60px;" />
+          </label>
+          <label id="wt-gap-label" style="display:none;">Session gap (s):
+            <input type="number" id="wt-gap" value="3" min="1" max="15" style="width: 60px;" />
+          </label>
+        </div>
+        <div id="wt-timeline"></div>
+        <p style="font-size: 0.8rem; color: var(--text-faint); margin-bottom:0;">
+          Pink dots are events (fixed sample data, seconds 0–30). Colored
+          bars are the windows this configuration produces — resize or
+          switch type and watch them recompute live.
+        </p>
+      </div>
+
+      <div id="quiz-root" data-module-id="windows-time"></div>
+
+      <nav class="module-pager">
+        <a class="pager-link prev" href="03-datastream-api.html">
+          <span class="dir">← Previous</span>
+          <span class="title">03. The DataStream API</span>
+        </a>
+        <a class="pager-link next" href="05-state-fault-tolerance.html">
+          <span class="dir">Next</span>
+          <span class="title">05. State &amp; Fault Tolerance →</span>
+        </a>
+      </nav>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>Flink Interactive Guide — <a href="../index.html">back to overview</a></p>
+    </div>
+  </footer>
+
+  <script src="../assets/js/app.js"></script>
+  <script>
+    // Watermark walkthrough
+    (function () {
+      const OUT_OF_ORDERNESS = 2;
+      // [event time]; arrival order is the array order, and it's deliberately out of order.
+      const events = [2, 5, 4, 9, 7, 12, 11, 15];
+      let i = 0;
+      let watermark = -Infinity;
+      const body = document.getElementById("wm-body");
+
+      function reset() {
+        i = 0;
+        watermark = -Infinity;
+        body.innerHTML = "";
+      }
+
+      document.getElementById("wm-next").addEventListener("click", () => {
+        if (i >= events.length) return;
+        const t = events[i];
+        const late = t < watermark;
+        watermark = Math.max(watermark, t - OUT_OF_ORDERNESS);
+        const row = document.createElement("tr");
+        row.innerHTML = `<td>${i + 1}</td><td>${t}</td><td>${watermark === -Infinity ? "—" : watermark}</td>` +
+          `<td style="color: ${late ? "var(--danger)" : "var(--success)"}">${late ? "Late" : "On time"}</td>`;
+        body.appendChild(row);
+        i++;
+      });
+
+      document.getElementById("wm-reset").addEventListener("click", reset);
+    })();
+
+    // Window visualizer
+    (function () {
+      const events = [1, 2, 4, 5, 9, 10, 11, 12, 18, 19, 20, 25, 26];
+      const MAX_T = 30;
+      const rowColors = ["#3fb6ff", "#7a6bff", "#ff5fa8", "#3ddc97", "#ffb84d", "#ff8a5c"];
+
+      const typeSel = document.getElementById("wt-type");
+      const sizeInput = document.getElementById("wt-size");
+      const slideInput = document.getElementById("wt-slide");
+      const gapInput = document.getElementById("wt-gap");
+      const sizeLabel = document.getElementById("wt-size-label");
+      const slideLabel = document.getElementById("wt-slide-label");
+      const gapLabel = document.getElementById("wt-gap-label");
+      const timeline = document.getElementById("wt-timeline");
+
+      function computeWindows() {
+        const type = typeSel.value;
+        if (type === "tumbling") {
+          const size = Number(sizeInput.value) || 10;
+          const windows = [];
+          for (let start = 0; start < MAX_T; start += size) {
+            windows.push({ start, end: Math.min(start + size, MAX_T) });
+          }
+          return windows;
+        }
+        if (type === "sliding") {
+          const size = Number(sizeInput.value) || 10;
+          const slide = Number(slideInput.value) || 5;
+          const windows = [];
+          for (let start = -size + slide; start < MAX_T; start += slide) {
+            const s = Math.max(start, 0);
+            const e = Math.min(start + size, MAX_T);
+            if (e > s) windows.push({ start: s, end: e });
+          }
+          return windows;
+        }
+        // session
+        const gap = Number(gapInput.value) || 3;
+        const sorted = [...events].sort((a, b) => a - b);
+        const windows = [];
+        let cur = null;
+        sorted.forEach((t) => {
+          if (cur && t - cur.end <= gap) {
+            cur.end = t;
+          } else {
+            if (cur) windows.push(cur);
+            cur = { start: t, end: t };
+          }
+        });
+        if (cur) windows.push(cur);
+        return windows;
+      }
+
+      function render() {
+        const type = typeSel.value;
+        sizeLabel.style.display = type === "session" ? "none" : "flex";
+        slideLabel.style.display = type === "sliding" ? "flex" : "none";
+        gapLabel.style.display = type === "session" ? "flex" : "none";
+
+        const windows = computeWindows();
+        timeline.innerHTML = "";
+
+        const rowHeight = 26;
+        const eventsBottom = 30;
+        timeline.style.height = `${windows.length * rowHeight + eventsBottom + 30}px`;
+
+        const axis = document.createElement("div");
+        axis.className = "wt-axis";
+        axis.style.bottom = `${eventsBottom}px`;
+        timeline.appendChild(axis);
+
+        for (let t = 0; t <= MAX_T; t += 5) {
+          const tick = document.createElement("div");
+          tick.className = "wt-tick";
+          tick.style.left = `${(t / MAX_T) * 100}%`;
+          tick.style.bottom = `${eventsBottom - 20}px`;
+          tick.textContent = `${t}s`;
+          timeline.appendChild(tick);
+        }
+
+        events.forEach((t) => {
+          const dot = document.createElement("div");
+          dot.className = "wt-event";
+          dot.style.left = `${(t / MAX_T) * 100}%`;
+          dot.style.bottom = `${eventsBottom}px`;
+          dot.title = `event @ ${t}s`;
+          timeline.appendChild(dot);
+        });
+
+        windows.forEach((w, idx) => {
+          const count = events.filter((t) => t >= w.start && t < w.end || (w.end === MAX_T && t === MAX_T)).length;
+          const bar = document.createElement("div");
+          bar.className = "wt-window";
+          bar.style.left = `${(w.start / MAX_T) * 100}%`;
+          bar.style.width = `${((w.end - w.start) / MAX_T) * 100}%`;
+          bar.style.bottom = `${eventsBottom + 14 + idx * rowHeight}px`;
+          bar.style.background = rowColors[idx % rowColors.length];
+          bar.textContent = `[${w.start}–${w.end}) · ${count} events`;
+          timeline.appendChild(bar);
+        });
+      }
+
+      [typeSel, sizeInput, slideInput, gapInput].forEach((el) => el.addEventListener("input", render));
+      typeSel.addEventListener("change", render);
+      render();
+    })();
+
+    window.QUIZ_DATA = {
+      title: "Check your understanding",
+      questions: [
+        {
+          prompt: "Why do most real-time applications prefer event time over processing time?",
+          options: [
+            "Event time is faster to compute",
+            "Event time gives correct, reproducible results even when events arrive late or out of order",
+            "Processing time isn't supported in Flink",
+            "Event time requires no watermarks",
+          ],
+          correct: 1,
+          explain: "Processing time depends on when the machine happens to see the event, which varies run to run; event time reflects when things actually happened.",
+        },
+        {
+          prompt: "What does a watermark of value W mean?",
+          options: [
+            "Exactly W events have been processed",
+            "The system is asserting no more events with timestamp less than W should arrive",
+            "The window of size W has just closed",
+            "The current processing-time clock reads W",
+          ],
+          correct: 1,
+          explain: "A watermark is a threshold claim about event-time completeness, which is what lets time-windows know when it's safe to fire.",
+        },
+        {
+          prompt: "How does a sliding window differ from a tumbling window?",
+          options: [
+            "Sliding windows never overlap; tumbling windows do",
+            "Sliding windows can assign one event to multiple overlapping windows; tumbling windows are non-overlapping",
+            "Tumbling windows are only for session gaps",
+            "There's no difference besides the name",
+          ],
+          correct: 1,
+          explain: "A slide interval smaller than the window size means windows overlap, so an event can land in more than one window at once.",
+        },
+        {
+          prompt: "A session window closes when...",
+          options: [
+            "A fixed wall-clock time is reached",
+            "A configured gap of inactivity passes with no new events for that key",
+            "The JobManager restarts",
+            "Exactly 100 events have arrived",
+          ],
+          correct: 1,
+          explain: "Session windows are defined by inactivity: once the gap elapses without a new event, the session closes.",
+        },
+      ],
+    };
+  </script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

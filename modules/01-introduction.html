@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>01 · Introduction to Flink — Flink Interactive Guide</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐿️</text></svg>" />
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">🐿️</span>
+        Flink Interactive Guide
+      </a>
+      <nav class="nav-links">
+        <a href="../index.html">Home</a>
+        <a href="01-introduction.html">Modules</a>
+        <a href="../cheatsheet.html">Cheatsheet</a>
+        <a href="../CONTRIBUTING.md">Contributing</a>
+        <a href="https://github.com/trishala23/flink-interactive-guide" target="_blank" rel="noopener">GitHub ↗</a>
+        <span class="progress-pill" data-progress-pill></span>
+      </nav>
+      <button class="nav-toggle" aria-label="Toggle menu">☰</button>
+    </div>
+  </header>
+
+  <div class="container module-layout">
+    <aside class="module-sidebar">
+      <h4>Modules</h4>
+      <ol>
+        <li><a data-module-id="introduction" href="01-introduction.html"><span class="dot"></span>01. Introduction</a></li>
+        <li><a data-module-id="architecture" href="02-architecture.html"><span class="dot"></span>02. Architecture</a></li>
+        <li><a data-module-id="datastream-api" href="03-datastream-api.html"><span class="dot"></span>03. DataStream API</a></li>
+        <li><a data-module-id="windows-time" href="04-windows-time.html"><span class="dot"></span>04. Time &amp; Windows</a></li>
+        <li><a data-module-id="state-fault-tolerance" href="05-state-fault-tolerance.html"><span class="dot"></span>05. State &amp; Fault Tolerance</a></li>
+        <li><a data-module-id="table-sql" href="06-table-sql.html"><span class="dot"></span>06. Table API &amp; SQL</a></li>
+        <li><a data-module-id="deployment" href="07-deployment.html"><span class="dot"></span>07. Deployment</a></li>
+      </ol>
+    </aside>
+
+    <main class="module-main">
+      <div class="module-kicker">Module 01</div>
+      <h1>Introduction to Flink</h1>
+      <p class="intro">
+        Apache Flink is an open-source engine for processing data streams —
+        unbounded sequences of events — with high throughput, low latency,
+        and exact correctness guarantees even when machines fail.
+      </p>
+
+      <h2>Why stream processing?</h2>
+      <p>
+        Most real-world data doesn't arrive as a finished dataset — it
+        arrives continuously: clicks, sensor readings, orders, log lines.
+        Traditional <strong>batch</strong> systems wait until a chunk of
+        data has fully landed (an hour's worth of logs, a day's worth of
+        orders) before processing it. That's simple, but it means insights
+        are always at least one batch late.
+      </p>
+      <p>
+        <strong>Stream processing</strong> flips this: instead of waiting
+        for data to accumulate, it processes each event as it arrives,
+        producing results continuously. A fraud-detection rule can fire in
+        milliseconds instead of at the next nightly batch job.
+      </p>
+
+      <div class="callout">
+        <strong>Flink's core idea:</strong> batch is just a special case of
+        streaming — a stream that happens to end. Flink's runtime treats
+        bounded and unbounded data with the same engine and largely the
+        same APIs, rather than bolting a "streaming mode" onto a batch
+        engine (or vice versa).
+      </div>
+
+      <h2>Batch vs. streaming, side by side</h2>
+      <p>Toggle between the two mental models below.</p>
+
+      <div class="widget">
+        <div class="widget-label">Interactive comparison</div>
+        <div class="pill-toggle" id="batch-stream-toggle">
+          <button type="button" class="active" data-mode="batch">Batch</button>
+          <button type="button" data-mode="stream">Streaming</button>
+        </div>
+        <div class="result-box" id="batch-stream-box"></div>
+      </div>
+
+      <h2>Where Flink fits</h2>
+      <p>
+        Flink isn't the only streaming engine. Here's how it's commonly
+        positioned against two other tools you'll hear mentioned in the
+        same breath:
+      </p>
+      <table>
+        <thead>
+          <tr><th>Engine</th><th>Processing model</th><th>Typical strength</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Apache Flink</strong></td>
+            <td>True event-at-a-time streaming (batch as a special case)</td>
+            <td>Low latency, rich windowing/state, exactly-once semantics</td>
+          </tr>
+          <tr>
+            <td>Spark Structured Streaming</td>
+            <td>Micro-batch (very small batches on a fixed interval)</td>
+            <td>One engine for batch + streaming + ML, huge ecosystem</td>
+          </tr>
+          <tr>
+            <td>Kafka Streams</td>
+            <td>True event-at-a-time streaming, embedded library</td>
+            <td>No separate cluster — runs inside your application</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>What Flink is used for</h2>
+      <ul>
+        <li><strong>Real-time analytics</strong> — dashboards and metrics that update as events happen, not once an hour.</li>
+        <li><strong>Fraud &amp; anomaly detection</strong> — evaluating rules against a live event stream with millisecond latency.</li>
+        <li><strong>Event-driven applications</strong> — triggering workflows the moment a condition in the stream is met.</li>
+        <li><strong>Continuous ETL</strong> — keeping a data warehouse or search index up to date as source systems change.</li>
+      </ul>
+
+      <h2>Try it: batch or streaming?</h2>
+      <p>For each scenario, decide which model fits better.</p>
+
+      <div class="widget">
+        <div class="widget-label">Scenario matcher</div>
+        <div id="scenario-matcher"></div>
+      </div>
+
+      <div id="quiz-root" data-module-id="introduction"></div>
+
+      <nav class="module-pager">
+        <span></span>
+        <a class="pager-link next" href="02-architecture.html">
+          <span class="dir">Next</span>
+          <span class="title">02. Architecture &amp; Runtime →</span>
+        </a>
+      </nav>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>Flink Interactive Guide — <a href="../index.html">back to overview</a></p>
+    </div>
+  </footer>
+
+  <script src="../assets/js/app.js"></script>
+  <script>
+    // Batch vs. streaming toggle
+    (function () {
+      const toggle = document.getElementById("batch-stream-toggle");
+      const box = document.getElementById("batch-stream-box");
+      const copy = {
+        batch: "BATCH: waits for a bounded dataset to fully arrive, then " +
+          "processes it all at once. Simple mental model, but results are " +
+          "only ever as fresh as the last run. Good fit: end-of-day reports, " +
+          "large historical reprocessing.",
+        stream: "STREAMING: processes each event as it arrives, maintaining " +
+          "running state (counts, aggregates, joins) between events. Results " +
+          "are continuously up to date. Good fit: live dashboards, alerting, " +
+          "anything where 'an hour late' is too late.",
+      };
+      function render(mode) {
+        box.textContent = copy[mode];
+      }
+      toggle.querySelectorAll("button").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          toggle.querySelectorAll("button").forEach((b) => b.classList.remove("active"));
+          btn.classList.add("active");
+          render(btn.dataset.mode);
+        });
+      });
+      render("batch");
+    })();
+
+    // Scenario matcher
+    (function () {
+      const scenarios = [
+        { text: "Generating a monthly billing statement from a full month of usage records.", answer: "batch" },
+        { text: "Alerting on-call engineers within seconds of an error-rate spike.", answer: "stream" },
+        { text: "Detecting a stolen credit card being used across two cities within minutes.", answer: "stream" },
+        { text: "Re-training a recommendation model nightly on the previous day's full click log.", answer: "batch" },
+      ];
+      const root = document.getElementById("scenario-matcher");
+
+      scenarios.forEach((s, i) => {
+        const row = document.createElement("div");
+        row.style.marginBottom = "14px";
+        row.style.paddingBottom = "14px";
+        row.style.borderBottom = "1px solid var(--border)";
+
+        const p = document.createElement("p");
+        p.style.margin = "0 0 8px";
+        p.style.color = "var(--text)";
+        p.style.fontSize = "0.9rem";
+        p.textContent = s.text;
+        row.appendChild(p);
+
+        const btnBatch = document.createElement("button");
+        btnBatch.className = "btn btn-secondary btn-sm";
+        btnBatch.textContent = "Batch";
+        btnBatch.style.marginRight = "8px";
+
+        const btnStream = document.createElement("button");
+        btnStream.className = "btn btn-secondary btn-sm";
+        btnStream.textContent = "Streaming";
+
+        const feedback = document.createElement("span");
+        feedback.style.marginLeft = "10px";
+        feedback.style.fontSize = "0.85rem";
+
+        function choose(pick, btn) {
+          [btnBatch, btnStream].forEach((b) => (b.disabled = true));
+          if (pick === s.answer) {
+            feedback.textContent = "✓ Right.";
+            feedback.style.color = "var(--success)";
+          } else {
+            feedback.textContent = `✗ This one fits "${s.answer}" better.`;
+            feedback.style.color = "var(--danger)";
+          }
+        }
+
+        btnBatch.addEventListener("click", () => choose("batch", btnBatch));
+        btnStream.addEventListener("click", () => choose("stream", btnStream));
+
+        row.appendChild(btnBatch);
+        row.appendChild(btnStream);
+        row.appendChild(feedback);
+        root.appendChild(row);
+      });
+    })();
+
+    // Quiz data
+    window.QUIZ_DATA = {
+      title: "Check your understanding",
+      questions: [
+        {
+          prompt: "In Flink's model, how does batch processing relate to streaming?",
+          options: [
+            "They're unrelated engines bundled together",
+            "Batch is a bounded, finite case of a stream",
+            "Streaming is just batch run every second",
+            "Flink only supports one of the two",
+          ],
+          correct: 1,
+          explain: "Flink treats a finite dataset as a stream that happens to end, so the same engine and largely the same APIs cover both.",
+        },
+        {
+          prompt: "What is the main advantage of streaming over batch for fraud detection?",
+          options: [
+            "It uses less storage",
+            "It's easier to write SQL for",
+            "It reacts to events within milliseconds instead of waiting for the next batch",
+            "It doesn't require a cluster",
+          ],
+          correct: 2,
+          explain: "Streaming evaluates rules as each event arrives, so suspicious activity can be caught immediately rather than at the next scheduled run.",
+        },
+        {
+          prompt: "Which statement about Spark Structured Streaming vs. Flink is accurate?",
+          options: [
+            "Spark Structured Streaming processes one event at a time like Flink",
+            "Spark Structured Streaming uses a micro-batch model",
+            "Flink cannot do batch processing at all",
+            "Kafka Streams requires a separate cluster like Flink",
+          ],
+          correct: 1,
+          explain: "Spark Structured Streaming is built on very small batches on an interval, while Flink and Kafka Streams process events individually.",
+        },
+      ],
+    };
+  </script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>
