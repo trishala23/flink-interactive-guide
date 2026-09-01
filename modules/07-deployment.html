@@ -49,21 +49,46 @@
         much isolation your jobs need from each other.
       </p>
 
-      <h2>Cluster lifecycles</h2>
+      <div class="callout">
+        <strong>New to this? Start here.</strong> Remember Module 02's
+        restaurant kitchen (JobManager = manager, TaskManagers = cooks)?
+        This module is really just: <em>where does that kitchen live?</em>
+        Do you build your own kitchen from scratch? Rent space in a
+        shared commercial kitchen alongside other chefs? Book a private
+        pop-up kitchen for just one event? Or order from a ghost-kitchen
+        service where someone else already runs everything? Same
+        trade-offs, just for compute clusters instead of kitchens.
+      </div>
+
+      <h2>Why does this choice even matter?</h2>
+      <p>
+        Two things pull in opposite directions: <strong>efficiency</strong>
+        (not wasting time or money spinning up infrastructure) and
+        <strong>isolation</strong> (one job's problem not becoming
+        everyone's problem). Run every job in its own brand-new cluster,
+        and you're maximally isolated but paying a setup cost every
+        single time. Cram every job into one shared, always-on cluster,
+        and startup is instant — but now if that cluster's manager
+        crashes, every job on it is affected at once, not just the one
+        that caused the problem. Every option below is a different point
+        on that same trade-off.
+      </p>
+
+      <h2>Cluster lifecycles — the shape of the kitchen booking</h2>
       <ul>
-        <li><strong>Session cluster</strong> — one long-lived cluster accepts many jobs over time. Efficient (shared resources, fast job startup) but jobs share fate: a JobManager crash can affect the whole session.</li>
-        <li><strong>Application cluster</strong> — a cluster is started for exactly one application/job and torn down when it finishes. Better isolation, the standard recommendation on Kubernetes.</li>
-        <li><strong>Per-job cluster</strong> — similar idea, submitted from a client rather than the image itself; deprecated on some resource managers in favor of application mode.</li>
+        <li><strong>Session cluster</strong> — like a shared commercial kitchen, always open, used by many chefs (jobs) throughout the day. Efficient — no setup wait — but everyone using it shares its fate: if the kitchen loses power (the JobManager crashes), every chef currently cooking there is affected, not just one.</li>
+        <li><strong>Application cluster</strong> — like booking a private pop-up kitchen for exactly one event, torn down once it's over. Nobody else's problems can leak into your event. This is the standard recommendation on Kubernetes.</li>
+        <li><strong>Per-job cluster</strong> — the same private-kitchen idea, just booked by a client from outside rather than baked into the event's own setup; increasingly replaced by application mode on newer resource managers.</li>
       </ul>
 
-      <h2>Where it runs</h2>
+      <h2>Where the kitchen actually sits</h2>
       <table>
-        <thead><tr><th>Target</th><th>Notes</th></tr></thead>
+        <thead><tr><th>Target</th><th>In plain words</th></tr></thead>
         <tbody>
-          <tr><td><strong>Standalone</strong></td><td>You run JobManager/TaskManager processes yourself. No resource manager integration — full control, more manual ops.</td></tr>
-          <tr><td><strong>Kubernetes</strong></td><td>Native Kubernetes deployment (recommended) or via the Flink Kubernetes Operator for lifecycle management, upgrades, and savepoint-based rescaling.</td></tr>
-          <tr><td><strong>YARN</strong></td><td>Common in existing Hadoop ecosystems; Flink requests containers from YARN's ResourceManager.</td></tr>
-          <tr><td><strong>Managed services</strong></td><td>e.g. Amazon Managed Service for Apache Flink, Ververica Platform — someone else runs the cluster; you submit jobs.</td></tr>
+          <tr><td><strong>Standalone</strong></td><td>You build the kitchen yourself — run JobManager/TaskManager processes by hand, with nothing automatically managing them. Full control, but every bit of setup and monitoring is on you.</td></tr>
+          <tr><td><strong>Kubernetes</strong></td><td>A modern, flexible facility that can add or remove kitchen space on demand. The recommended target today, especially via the Flink Kubernetes Operator, which automates upgrades and resizing for you.</td></tr>
+          <tr><td><strong>YARN</strong></td><td>Whatever facility your company already built, if it's a Hadoop-based one — Flink just requests space (containers) from YARN's existing resource manager.</td></tr>
+          <tr><td><strong>Managed services</strong></td><td>A ghost-kitchen service (e.g. Amazon Managed Service for Apache Flink, Ververica Platform) — someone else owns and runs the kitchen entirely; you just hand them your job.</td></tr>
         </tbody>
       </table>
 
@@ -73,23 +98,36 @@
         <div id="dep-wizard"></div>
       </div>
 
-      <h2>Scaling and upgrades</h2>
+      <h2>Scaling and upgrades — changing the recipe without losing the kitchen</h2>
       <p>
-        To change parallelism or deploy new job code without losing state,
-        take a <strong>savepoint</strong> (Module 05), stop the job, then
-        restart it from that savepoint with the new parallelism or JAR.
-        The Flink Kubernetes Operator and tools like the Application Mode
-        upgrade flow automate this sequence.
+        Say you need more cooks (higher parallelism) or a bug-fixed
+        recipe (new job code) — but you don't want to throw away
+        everything already cooking (the job's state). The pattern is
+        always the same: take a <strong>savepoint</strong> (Module 05,
+        the manual "save" before something risky), stop the job, then
+        restart it from that exact savepoint with the new parallelism or
+        code. The Flink Kubernetes Operator and the Application Mode
+        upgrade flow automate this stop-save-restart sequence for you.
       </p>
 
       <h2>Watching a running job</h2>
       <p>
-        The <strong>Flink Web UI</strong> (served by the Dispatcher) shows
-        running/completed jobs, the operator graph, backpressure, and
-        checkpoint history. For long-term monitoring, Flink's metrics
-        system exports to Prometheus, Datadog, Graphite, and others — the
-        key metrics to alert on are checkpoint duration/failure rate,
-        consumer lag, and backpressure.
+        The <strong>Flink Web UI</strong> (served by the Dispatcher, from
+        Module 02) is your window into the kitchen while it's running:
+        jobs in progress, the operator graph, and checkpoint history. It
+        also shows <strong>backpressure</strong> — a simple idea despite
+        the name: if one cook is too slow, everyone feeding work to that
+        cook has to slow down too, the same way a slow cash register
+        backs up the whole checkout line behind it. High backpressure
+        means a downstream step can't keep up.
+      </p>
+      <p>
+        For long-term monitoring (not just "what's happening right now"),
+        Flink's metrics system exports to Prometheus, Datadog, Graphite,
+        and others. The handful of metrics worth alerting on: checkpoint
+        duration/failure rate (is the safety net still working?), consumer
+        lag (is the source falling behind?), and backpressure (is
+        something downstream stuck?).
       </p>
 
       <div id="quiz-root" data-module-id="deployment"></div>
@@ -232,6 +270,17 @@
     window.QUIZ_DATA = {
       title: "Check your understanding",
       questions: [
+        {
+          prompt: "What are the two competing forces behind every deployment choice in this module?",
+          options: [
+            "Cost and color scheme",
+            "Efficiency (avoiding repeated setup) and isolation (one job's problem not affecting others)",
+            "Java vs. Python support",
+            "Whether the job uses SQL or the DataStream API",
+          ],
+          correct: 1,
+          explain: "A shared, always-on cluster is efficient but blast-radius risky; a fresh cluster per job is isolated but costs setup time every run — every deployment mode sits somewhere on that trade-off.",
+        },
         {
           prompt: "What's the main trade-off of a session cluster vs. an application cluster?",
           options: [
