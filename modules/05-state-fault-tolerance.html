@@ -63,43 +63,93 @@
         event.
       </p>
 
-      <h2>Two kinds of state</h2>
+      <div class="callout">
+        <strong>New to this? Start here.</strong> Think of a video game
+        with no save feature: if it crashes an hour in, you're back to
+        the very start — all that progress just gone. A game with
+        autosave is different: it crashes, you reload the last save, and
+        you're back in business a minute later, not an hour. Flink's
+        "state" is your job's progress (running counts, what it's seen
+        so far); a "checkpoint" is the autosave. Everything below is
+        really just: what gets saved, and how the autosave works.
+      </div>
+
+      <h2>Why does a streaming job even need "saves"?</h2>
+      <p>
+        Picture a job counting how many times each user has viewed a page
+        today — a running total per user that lives entirely in memory
+        while the job runs. Now a server hosting part of that job
+        crashes. Without any saved progress, you have two bad options:
+        wipe all counts back to zero (you just lost real data), or
+        somehow guess what to keep (you risk counting some views twice).
+        Neither is acceptable for a job that's supposed to run for
+        months. Checkpoints are how Flink avoids that dilemma entirely —
+        it always has a recent, trustworthy save to reload from.
+      </p>
+
+      <h2>Two kinds of state (two kinds of "progress" to save)</h2>
       <ul>
-        <li><strong>Keyed state</strong> — scoped to the current key on a keyed stream (<code>ValueState</code>, <code>ListState</code>, <code>MapState</code>). Used by almost every stateful operator: running counts, sessions, dedup sets.</li>
-        <li><strong>Operator state</strong> — scoped to a parallel operator instance rather than a key. Used for things like source offsets (e.g. a Kafka consumer's per-partition read position).</li>
+        <li>
+          <strong>Keyed state</strong> — one value <em>per key</em>, like
+          a scoreboard with a separate line for every player rather than
+          one shared number. In Flink this is <code>ValueState</code>,
+          <code>ListState</code>, or <code>MapState</code>, and it's what
+          almost every stateful operator uses under the hood: a running
+          count per customer, a session per device, a "have I seen this
+          ID before" set for deduplication.
+        </li>
+        <li>
+          <strong>Operator state</strong> — not tied to any key at all,
+          just tied to one worker's own progress, like a bookmark that
+          says "I've read up to page 47" regardless of what's written on
+          that page. The classic example is a Kafka source remembering
+          "I've read up to message #4821 in partition 2," so after a
+          restart it knows exactly where to resume reading.
+        </li>
       </ul>
 
-      <h2>Checkpoints: the safety net</h2>
+      <h2>Checkpoints: the autosave itself</h2>
       <p>
-        Periodically, the JobManager injects a <strong>checkpoint
-        barrier</strong> into the stream. As it flows through the graph,
-        every operator snapshots its state to durable storage the moment
-        the barrier passes. Once every operator has confirmed its
-        snapshot, the checkpoint is complete — a consistent, whole-pipeline
-        point-in-time you can recover from.
+        Periodically, the JobManager sends a <strong>checkpoint
+        barrier</strong> — think of it as a "save now" signal — flowing
+        through the pipeline alongside the real data. As it passes each
+        operator, that operator writes its current state to durable
+        storage. Once <em>every</em> operator across the whole pipeline
+        has confirmed its save, the checkpoint is complete: one
+        consistent, whole-pipeline point-in-time snapshot to recover
+        from — not a patchwork of saves taken at different moments.
       </p>
       <p>
-        On failure, Flink restarts the affected operators from the
+        On failure, Flink restarts the affected parts of the job from the
         <strong>latest completed checkpoint</strong> and replays source
-        data from the recorded offsets. Combined with a replayable source
-        (like Kafka) and transactional sinks, this is what gives Flink its
-        <strong>exactly-once</strong> guarantee.
+        data from the position recorded in that snapshot (that's what the
+        Kafka "bookmark" from operator state is for). Combined with a
+        replayable source like Kafka and transactional sinks, this
+        combination is what gives Flink its <strong>exactly-once</strong>
+        guarantee: every event affects the result exactly once, crash or
+        no crash.
       </p>
 
       <div class="callout">
         <strong>Checkpoints vs. savepoints:</strong> a checkpoint is
-        automatic, lightweight, and managed by Flink for failure recovery.
-        A <strong>savepoint</strong> is a manually triggered, portable
-        snapshot you use for planned operations — upgrading your job code,
-        changing parallelism, or migrating clusters — and then resume from.
+        Flink's own automatic, frequent autosave, purely for failure
+        recovery — you never trigger it by hand. A
+        <strong>savepoint</strong> is more like manually typing "save"
+        before doing something risky: you trigger it yourself before a
+        planned operation — upgrading your job's code, changing its
+        parallelism, or moving it to a different cluster — then resume
+        the new version of the job from that exact point, with nothing
+        lost.
       </div>
 
-      <h2>Try it: simulate a failure</h2>
+      <h2>Try it: simulate a crash</h2>
       <p>
-        Three parallel subtasks each track a running count (their keyed
-        state). The stream periodically checkpoints. Kill the job mid-flight
-        and watch it recover from the last checkpoint — not from zero, and
-        not by losing the snapshot.
+        Below are three parallel subtasks (Module 02), each keeping its
+        own running count — that's their keyed state. The "job" saves
+        (checkpoints) that count periodically. Start the stream, let a
+        checkpoint or two happen, then hit <strong>Simulate
+        failure</strong> and watch it reload from the last save — not
+        from zero, and not from thin air.
       </p>
 
       <div class="widget">
@@ -119,12 +169,57 @@
 
       <h2>State backends, briefly</h2>
       <p>
-        State lives in a <strong>state backend</strong> while the job runs.
-        The <code>HashMapStateBackend</code> keeps state as objects on the
-        JVM heap (fast, but limited by memory); <code>EmbeddedRocksDBStateBackend</code>
-        keeps state on local disk via RocksDB, spilling far beyond memory —
-        the usual choice for very large state. Both checkpoint to a durable
-        remote store (e.g. S3 or HDFS) regardless of which backend you pick.
+        While the job is running, state has to actually live somewhere on
+        the worker — that "somewhere" is the <strong>state backend</strong>.
+        Two options, with a trade-off you've probably made before with
+        your own notes:
+      </p>
+      <table>
+        <thead><tr><th>Backend</th><th>Like...</th><th>Trade-off</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code>HashMapStateBackend</code></td>
+            <td>Keeping it all in your head</td>
+            <td>Very fast to access, but limited by how much fits (JVM memory) — fine for small-to-moderate state.</td>
+          </tr>
+          <tr>
+            <td><code>EmbeddedRocksDBStateBackend</code></td>
+            <td>Writing it in a notebook on your desk</td>
+            <td>Slightly slower per access, but holds far more than memory ever could — the usual choice once state gets large (millions of keys).</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>
+        Either way, this local copy is just where state lives <em>while
+        running</em> — checkpoints still back it up to durable remote
+        storage (e.g. S3 or HDFS), which is what actually survives a
+        machine being lost entirely.
+      </p>
+
+      <h2>How this is actually used in Flink</h2>
+      <p>
+        A common real case: flag a customer if they make more than 5
+        transactions in one minute (basic fraud detection). That "count
+        in the last minute, per customer" has to survive restarts, or a
+        well-timed crash would quietly reset everyone's count to zero —
+        exactly the kind of state this module is about.
+      </p>
+      <pre><code>public class FraudCheckFunction extends KeyedProcessFunction&lt;String, Transaction, Alert&gt; {
+    // keyed state: one counter per customer ID, survives checkpoints and restarts
+    private ValueState&lt;Integer&gt; recentCount;
+
+    public void processElement(Transaction t, Context ctx, Collector&lt;Alert&gt; out) {
+        int count = recentCount.value() == null ? 0 : recentCount.value();
+        count++;
+        recentCount.update(count);
+        if (count &gt; 5) out.collect(new Alert(t.customerId));
+    }
+}</code></pre>
+      <p>
+        <code>recentCount</code> is exactly the "scoreboard per player"
+        keyed state from earlier. Because it's checkpointed automatically,
+        a crash mid-job can't quietly reset a customer's count and let
+        fraud slip through unflagged.
       </p>
 
       <div id="quiz-root" data-module-id="state-fault-tolerance"></div>
@@ -246,6 +341,17 @@
     window.QUIZ_DATA = {
       title: "Check your understanding",
       questions: [
+        {
+          prompt: "Without checkpoints, what's the risk when a machine running part of a job crashes?",
+          options: [
+            "Nothing — Flink jobs can't crash",
+            "You'd either lose all progress for the affected state, or risk double-counting events on restart",
+            "The job would just run slightly slower",
+            "Only the JobManager is ever at risk, never TaskManagers",
+          ],
+          correct: 1,
+          explain: "Like a game with no save feature, a crash with no checkpoint means either losing progress entirely or having no safe way to know what was already processed.",
+        },
         {
           prompt: "What's the difference between keyed state and operator state?",
           options: [
