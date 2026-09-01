@@ -49,6 +49,81 @@
         <strong>transformations</strong>, write to a <strong>sink</strong>.
       </p>
 
+      <h2>Why does this need its own API at all?</h2>
+      <p>
+        Imagine writing this by hand, without Flink: read events off a
+        Kafka topic, split work across several machines so one server
+        isn't doing everything, keep a running word count <em>per word</em>
+        safely even while dozens of events arrive per second, and — if one
+        of your machines crashes at 3am — recover without losing or
+        double-counting anything. That's a lot of hard distributed-systems
+        code before you've written a single line of the logic you actually
+        care about (counting words).
+      </p>
+      <p>
+        The DataStream API lets you skip almost all of that. You describe
+        <strong>what</strong> transformation you want —
+        "filter these", "group by that key", "sum this field" — using a
+        handful of methods like <code>map</code> and <code>keyBy</code>,
+        and Flink's engine figures out <strong>how</strong> to actually run
+        it: splitting the work across TaskManagers and slots (Module 02),
+        tracking each key's running state correctly even with many events
+        arriving at once, and automatically recovering from a checkpoint if
+        something crashes (Module 05). You write around a dozen lines;
+        Flink handles the distributed-systems part.
+      </p>
+      <div class="callout">
+        <strong>One-line way to think about it:</strong> the DataStream API
+        is to a live, never-ending flow of data roughly what SQL is to a
+        database table — you say what result you want, and the engine
+        works out how to compute it efficiently, in parallel, across
+        machines.
+      </div>
+
+      <h2>How it's actually used in a real Flink job</h2>
+      <p>
+        The word-count example below reads from a plain network socket and
+        prints to your terminal, because that's easy to run on one laptop
+        for learning. A real production job almost always looks the same
+        <em>shape</em>, but with real systems on each end:
+      </p>
+      <table>
+        <thead><tr><th>In this guide</th><th>In production, typically</th></tr></thead>
+        <tbody>
+          <tr><td><code>socketTextStream(...)</code> / <code>fromElements(...)</code></td><td>A Kafka or Kinesis topic, a database changelog (CDC), or files landing in cloud storage</td></tr>
+          <tr><td><code>counts.print()</code></td><td>A database, a search index, another Kafka topic, or a dashboard/alerting system</td></tr>
+        </tbody>
+      </table>
+      <p>
+        Once written, this code is compiled into a job and submitted to a
+        cluster exactly the way Module 02 described: it becomes a
+        JobGraph, the JobManager schedules its operators as parallel
+        subtasks across TaskManagers, and — unlike a script you run
+        once — it then keeps running <strong>continuously</strong>,
+        processing new events as they arrive, for as long as the job is
+        deployed (days, weeks, months).
+      </p>
+      <p>
+        <strong>A concrete example:</strong> say an online store wants to
+        alert its team the moment any product's stock drops below 5 units,
+        instead of finding out from a report the next morning. That's a
+        DataStream job shaped almost exactly like the word-count example:
+      </p>
+      <pre><code>DataStream&lt;Order&gt; orders = env.fromSource(kafkaOrdersSource, watermarkStrategy, "orders");
+
+orders
+    .keyBy(Order::getProductId)              // group by product, like keyBy(t -> t.f0) below
+    .process(new LowStockAlertFunction())    // keeps a running count in state per product
+    .sinkTo(slackAlertSink);                 // posts to Slack the instant stock is low
+
+env.execute("low-stock-alerts");</code></pre>
+      <p>
+        This job never "finishes" — it just keeps watching the order
+        stream and reacting within milliseconds, which is exactly the
+        batch-vs-streaming trade-off from Module 01, now expressed as real
+        code.
+      </p>
+
       <h2>Anatomy of a pipeline</h2>
       <div class="code-tabs">
         <button class="code-tab active" data-target="java">Java</button>
@@ -89,15 +164,40 @@ env.execute("word-count")</code></pre>
       </div>
 
       <h2>The core transformations</h2>
+      <p>In plain words, with a small example for each:</p>
       <table>
-        <thead><tr><th>Operator</th><th>What it does</th></tr></thead>
+        <thead><tr><th>Operator</th><th>In plain words</th><th>Example</th></tr></thead>
         <tbody>
-          <tr><td><code>map</code></td><td>One input element in, exactly one output element out (a 1:1 transform).</td></tr>
-          <tr><td><code>flatMap</code></td><td>One input element in, zero or more output elements out.</td></tr>
-          <tr><td><code>filter</code></td><td>Keeps an element only if a predicate returns true.</td></tr>
-          <tr><td><code>keyBy</code></td><td>Logically partitions the stream by a key — required before most stateful operations.</td></tr>
-          <tr><td><code>sum</code> / <code>reduce</code> / <code>aggregate</code></td><td>Combines elements within a key, emitting an updated result as each new element arrives.</td></tr>
-          <tr><td><code>window</code></td><td>Groups a keyed stream into time- or count-based buckets before aggregating (Module 04).</td></tr>
+          <tr>
+            <td><code>map</code></td>
+            <td>Transforms each item into exactly one new item — nothing added, nothing dropped, just changed.</td>
+            <td><code>map(price -&gt; price * 1.1)</code> — add 10% tax to every price.</td>
+          </tr>
+          <tr>
+            <td><code>flatMap</code></td>
+            <td>Like <code>map</code>, but each item can turn into zero, one, or many items.</td>
+            <td><code>flatMap(line -&gt; line.split(" "))</code> — one sentence in, many words out.</td>
+          </tr>
+          <tr>
+            <td><code>filter</code></td>
+            <td>Throws away items that don't match a yes/no check; keeps the rest untouched.</td>
+            <td><code>filter(order -&gt; order.amount &gt; 100)</code> — only keep big orders.</td>
+          </tr>
+          <tr>
+            <td><code>keyBy</code></td>
+            <td>Groups the stream by a field, so everything else can be tracked "per group." Required before most running totals or windows.</td>
+            <td><code>keyBy(order -&gt; order.customerId)</code> — track each customer separately.</td>
+          </tr>
+          <tr>
+            <td><code>sum</code> / <code>reduce</code> / <code>aggregate</code></td>
+            <td>Keeps a running combined value per key (a total, a min/max, a custom combine), updating it as new items for that key arrive.</td>
+            <td><code>keyBy(...).sum("amount")</code> — a live running total spent per customer.</td>
+          </tr>
+          <tr>
+            <td><code>window</code></td>
+            <td>Instead of one running total forever, groups a keyed stream into time- or count-based buckets first (Module 04) — e.g. "per 5 minutes" instead of "since the beginning of time."</td>
+            <td><code>keyBy(...).window(TumblingEventTimeWindows.of(Time.minutes(5))).sum("amount")</code></td>
+          </tr>
         </tbody>
       </table>
 
@@ -225,6 +325,17 @@ env.execute("word-count")</code></pre>
     window.QUIZ_DATA = {
       title: "Check your understanding",
       questions: [
+        {
+          prompt: "What does the DataStream API save you from having to hand-write?",
+          options: [
+            "Nothing — it's just syntax sugar with no real benefit",
+            "Distributing work across machines, tracking per-key state safely, and recovering from crashes",
+            "It only saves you from writing print statements",
+            "It replaces the need to know any Flink concepts at all",
+          ],
+          correct: 1,
+          explain: "You describe the transformation you want; Flink's engine handles parallelizing it across TaskManagers, tracking state per key, and recovering via checkpoints.",
+        },
         {
           prompt: "What's the difference between map and flatMap?",
           options: [
