@@ -50,6 +50,36 @@
         for you.
       </p>
 
+      <div class="callout">
+        <strong>New to this? Start here.</strong> A normal SQL query is
+        like asking a librarian once, "how many books are checked out
+        right now?" — you get one answer, and that's the end of it. A
+        <em>streaming</em> SQL query is like asking that librarian to
+        stand there and call out an updated count every single time a
+        book is checked out or returned, forever, without you ever having
+        to ask again. Same SQL syntax you may already know — a
+        fundamentally different, never-ending kind of answer.
+      </div>
+
+      <h2>Why offer SQL when Module 03 already gave us an API?</h2>
+      <p>
+        Two reasons. First, <strong>far more people already know SQL</strong>
+        than know Flink's Java/Python APIs — data analysts, backend
+        engineers, anyone who's ever queried a database can write a
+        streaming pipeline without learning a new library. Second, SQL is
+        <strong>declarative</strong>: you say <em>what</em> result you
+        want, and Flink's query planner works out the most efficient way
+        to compute it — sometimes better than a hand-written pipeline,
+        the same way a database query planner can outsmart a hand-rolled
+        loop over rows.
+      </p>
+      <p>
+        In fact, the word-count example from Module 03
+        (<code>keyBy(...).sum(...)</code>) and the SQL query below solve
+        the same problem — a running total per group, updated forever —
+        just in two different languages for describing it.
+      </p>
+
       <h2>The same engine, a declarative face</h2>
       <p>
         Flink SQL runs on the exact same runtime as the DataStream API —
@@ -75,11 +105,23 @@
 SELECT category, SUM(amount) AS total
 FROM orders
 GROUP BY category;</code></pre>
+      <p style="font-size: 0.88rem; color: var(--text-dim);">
+        In plain words: the <code>CREATE TABLE</code> part just tells
+        Flink "here's what a row of order data looks like, and here's
+        where to actually read it from" (a Kafka topic, in this case).
+        The <code>WATERMARK FOR ...</code> line is the interesting part —
+        see the callout below. The <code>SELECT ... GROUP BY category</code>
+        underneath is the actual query — and unlike a spreadsheet formula
+        that computes once, it keeps re-emitting an updated total every
+        time a new order for that category arrives.
+      </p>
 
       <div class="callout">
         The <code>WATERMARK FOR ...</code> clause is exactly the watermark
-        concept from Module 04, just expressed in SQL DDL instead of a
-        <code>WatermarkStrategy</code> object.
+        idea from Module 04 — "how patient should Flink be with orders
+        that show up a little late" — just written as part of the table's
+        schema (SQL DDL) instead of a <code>WatermarkStrategy</code>
+        object in code.
       </div>
 
       <h2>Try it: a real (tiny) query engine</h2>
@@ -88,8 +130,11 @@ GROUP BY category;</code></pre>
         running entirely in your browser, against a small fixed
         <code>orders</code> table. It understands
         <code>SELECT / FROM / WHERE / GROUP BY / ORDER BY</code> and the
-        aggregates <code>COUNT, SUM, AVG, MIN, MAX</code>. Edit the query
-        and run it, or click an example.
+        aggregates <code>COUNT, SUM, AVG, MIN, MAX</code>. It runs on a
+        plain snapshot of data (not a live stream), so think of it as
+        practice with the SQL syntax itself — one piece of the bigger
+        streaming picture above. Edit the query and run it, or click an
+        example to see the pattern.
       </p>
 
       <div class="widget">
@@ -111,13 +156,23 @@ ORDER BY total DESC</textarea>
       </div>
 
       <h2>Table API: the programmatic equivalent</h2>
-      <p>The same query, written fluently instead of as a SQL string:</p>
+      <p>
+        Sometimes you don't want a raw SQL string in your code — maybe
+        you want autocomplete, type-checking, or to build a query
+        piece-by-piece based on some condition. The Table API is the same
+        idea as the SQL above, just written as chained method calls
+        instead of a string:
+      </p>
       <pre><code>Table result = tableEnv.from("orders")
     .groupBy($("category"))
     .select($("category"), $("amount").sum().as("total"));</code></pre>
       <p>
-        Table API and SQL are interchangeable — you can freely mix both
-        with each other and with the DataStream API in the same job.
+        This compiles to the exact same execution plan as the
+        <code>SELECT category, SUM(amount) ... GROUP BY category</code>
+        query above — Table API and SQL are two spellings of the same
+        thing. You can freely mix both with each other and with the
+        DataStream API (Module 03) in the same job, converting back and
+        forth wherever it's convenient.
       </p>
 
       <div id="quiz-root" data-module-id="table-sql"></div>
@@ -147,6 +202,17 @@ ORDER BY total DESC</textarea>
     window.QUIZ_DATA = {
       title: "Check your understanding",
       questions: [
+        {
+          prompt: "Why does Flink offer SQL when the DataStream API already exists?",
+          options: [
+            "SQL is required — the DataStream API can't do aggregations",
+            "More people already know SQL, and it's declarative, letting Flink's planner choose how to execute it",
+            "SQL is only for looking at logs, not real pipelines",
+            "It's purely for backwards compatibility with old versions",
+          ],
+          correct: 1,
+          explain: "SQL lowers the barrier to entry for people who already know it, and being declarative means you describe the result you want while Flink's planner figures out how to compute it.",
+        },
         {
           prompt: "How does a Flink SQL streaming query behave compared to a traditional database query?",
           options: [
