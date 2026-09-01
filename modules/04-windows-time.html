@@ -58,34 +58,91 @@
         correctly.
       </p>
 
-      <h2>Three notions of time</h2>
+      <div class="callout">
+        <strong>New to this? Start here.</strong> Picture water flowing
+        continuously out of a tap — it never stops, so "what's the total
+        amount of water?" is a question with no answer yet. But if you
+        hold a bucket under it for exactly 10 seconds, you get a real,
+        useful number: "2 liters in this 10-second bucket." A
+        <strong>window</strong> is that bucket — a way to catch a slice of
+        an endless stream so you can ask "how many orders in the last 5
+        minutes?" instead of the unanswerable "how many orders ever?"
+      </div>
+
+      <h2>Why does this need three different clocks?</h2>
+      <p>
+        Say someone plays a mobile game on a train, scores a point at
+        2:00:00pm, but the phone loses signal and that score only reaches
+        Flink's servers at 2:00:05pm, five seconds later. Which time should
+        "count" for that point — 2:00:00 or 2:00:05? That five-second gap
+        is exactly why Flink lets you pick between three clocks:
+      </p>
       <table>
-        <thead><tr><th>Time</th><th>Meaning</th></tr></thead>
+        <thead><tr><th>Clock</th><th>In plain words</th><th>Example</th></tr></thead>
         <tbody>
-          <tr><td><strong>Event time</strong></td><td>When the event actually happened, per a timestamp in the data itself. Correct even if events arrive late or out of order.</td></tr>
-          <tr><td><strong>Ingestion time</strong></td><td>When the event entered Flink. A middle ground — stable, but not the true origin time.</td></tr>
-          <tr><td><strong>Processing time</strong></td><td>The system clock of the machine doing the processing, at the moment it processes the event. Simplest and fastest, but not reproducible.</td></tr>
+          <tr>
+            <td><strong>Event time</strong></td>
+            <td>The time stamped on the event itself, from wherever it happened — like the postmark on a letter, not the day it lands in your mailbox. Correct even if the event shows up late.</td>
+            <td>The game point above always has event time <code>2:00:00pm</code>, no matter how late it arrives at Flink.</td>
+          </tr>
+          <tr>
+            <td>Ingestion time</td>
+            <td>The moment the event walks in Flink's door. A middle ground — more stable than processing time, but still not the event's true origin.</td>
+            <td>Flink stamps the point <code>2:00:05pm</code>, the instant it actually receives it.</td>
+          </tr>
+          <tr>
+            <td>Processing time</td>
+            <td>Whatever the server's clock happens to read the moment it gets around to handling the event. Simplest and fastest, but re-running the same data can give different results.</td>
+            <td>If the server is briefly overloaded and only processes the point at <code>2:00:07pm</code>, that's its processing time — two seconds later than ingestion, for no meaningful reason.</td>
+          </tr>
         </tbody>
       </table>
-      <p>Most real applications use <strong>event time</strong>, because network delays and retries mean "when it arrived" is not "when it happened."</p>
-
-      <h2>Watermarks: how Flink knows "we're caught up"</h2>
       <p>
-        With event time, Flink can't just wait for a window to "run out" —
-        events for it might still be in flight. A <strong>watermark</strong>
-        is a moving marker in the stream: watermark <code>W</code> asserts
-        "no more events with timestamp &lt; W should arrive." When the
-        watermark passes a window's end, that window fires. Events that
-        still arrive after that (later than the watermark allowed for) are
-        <strong>late</strong>.
+        Most real applications use <strong>event time</strong>, because
+        network delays and retries mean "when Flink saw it" is not the
+        same as "when it actually happened" — and for most questions you
+        care about (like a leaderboard, or "orders in the 2pm hour"), the
+        real happened-at time is the one that should count.
       </p>
+
+      <h2>Watermarks: how Flink knows "we're caught up enough"</h2>
+      <p>
+        Here's the catch with event time: Flink can't peek into the future
+        to know whether every 2:00pm-ish event has arrived yet — some
+        could still be stuck in transit. So Flink needs a policy for
+        deciding "I've waited long enough, let's close this window and
+        move on" — the same way a teacher might wait a minute after the
+        bell for stragglers, then start class anyway rather than waiting
+        forever for someone who might not show up at all.
+      </p>
+      <p>
+        That policy is a <strong>watermark</strong> — a moving marker
+        Flink attaches to the stream. Watermark <code>W</code> is Flink
+        saying "I'm now assuming no more events with timestamp before
+        <code>W</code> are coming." Once the watermark passes a window's
+        end time, that window fires (produces its result). Any event that
+        still shows up after that — later than the watermark allowed
+        for — is officially <strong>late</strong>.
+      </p>
+      <div class="callout">
+        <strong>The trade-off:</strong> wait longer before declaring a
+        window "done," and you catch more stragglers but delay every
+        result. Wait less, and results come faster but you risk missing
+        events that were genuinely just running late. There's no
+        watermark setting that's free of this trade-off — you're always
+        choosing how patient to be.
+      </div>
 
       <div class="widget">
         <div class="widget-label">Watermark walkthrough</div>
         <p style="margin-top:0; font-size:0.88rem; color:var(--text-dim);">
-          Bounded out-of-orderness watermark, allowing events up to
-          <strong>2s</strong> out of order: <code>watermark = maxEventTimeSeen − 2</code>.
-          Step through events as they <em>arrive</em> (not necessarily in event-time order).
+          This job is configured to tolerate events up to
+          <strong>2 seconds</strong> out of order — its watermark is
+          always <code>2s</code> behind the latest event time it has seen
+          so far (<code>watermark = maxEventTimeSeen − 2</code>). Click
+          through the events below <em>in the order they arrive</em>
+          (which won't always match the order they happened in) and watch
+          the watermark — and whether each one counts as late.
         </p>
         <button class="btn btn-secondary btn-sm" id="wm-next">Next event →</button>
         <button class="btn btn-secondary btn-sm" id="wm-reset">Reset</button>
@@ -95,12 +152,47 @@
         </table>
       </div>
 
-      <h2>Window types</h2>
-      <ul>
-        <li><strong>Tumbling</strong> — fixed-size, non-overlapping, back-to-back. Every event belongs to exactly one window.</li>
-        <li><strong>Sliding</strong> — fixed-size, but a new window starts every "slide" interval, so windows overlap and an event can belong to several.</li>
-        <li><strong>Session</strong> — no fixed size; a window closes after a gap of inactivity, so it captures bursts of activity.</li>
-      </ul>
+      <h2>Three shapes of bucket</h2>
+      <p>Same "bucket catching water" idea from above, but three different ways to hold the bucket:</p>
+      <table>
+        <thead><tr><th>Type</th><th>In plain words</th><th>Everyday example</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Tumbling</strong></td>
+            <td>Fixed-size buckets, back-to-back with no gaps and no overlap. Every event lands in exactly one bucket.</td>
+            <td>Splitting your day into fixed meal slots — breakfast 7–9am, lunch 12–2pm. Any given moment belongs to exactly one slot (or none).</td>
+          </tr>
+          <tr>
+            <td><strong>Sliding</strong></td>
+            <td>Same fixed bucket size, but a new bucket starts every few seconds instead of only when the last one ends — so buckets overlap, and one event can land in several.</td>
+            <td>A weather app showing "rainfall in the last hour," refreshed every 10 minutes. Each new number overlaps almost all of the previous one.</td>
+          </tr>
+          <tr>
+            <td><strong>Session</strong></td>
+            <td>No fixed size at all — a bucket just stays open as long as events keep arriving, and closes once there's a gap of inactivity.</td>
+            <td>A Netflix "watch session": keep pressing play within a few minutes of each episode ending and it's still one session; walk away for an hour and your next episode starts a new one.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>How this is actually used in Flink</h2>
+      <p>
+        Windows almost always follow a <code>keyBy</code> (Module 03), so
+        each key gets its own independent buckets. A real example: an
+        online store wants "total sales per product, every 5 minutes" for
+        a live dashboard — not one grand total since the store opened.
+      </p>
+      <pre><code>orders
+    .keyBy(order -&gt; order.productId)
+    .window(TumblingEventTimeWindows.of(Time.minutes(5)))
+    .sum("amount")
+    .sinkTo(dashboardSink);</code></pre>
+      <p>
+        This is the same <code>keyBy(...).sum(...)</code> shape from
+        Module 03 — the only new piece is <code>.window(...)</code>
+        sitting in between, which is what turns "running total forever"
+        into "total for this 5-minute bucket, then start fresh."
+      </p>
 
       <div class="widget">
         <div class="widget-label">Interactive window visualizer</div>
@@ -124,9 +216,10 @@
         </div>
         <div id="wt-timeline"></div>
         <p style="font-size: 0.8rem; color: var(--text-faint); margin-bottom:0;">
-          Pink dots are events (fixed sample data, seconds 0–30). Colored
-          bars are the windows this configuration produces — resize or
-          switch type and watch them recompute live.
+          Pink dots are events on a 30-second timeline (fixed sample
+          data). Colored bars are the "buckets" this configuration
+          produces, with how many events landed in each — switch the
+          type or resize, and watch them recompute live.
         </p>
       </div>
 
@@ -293,6 +386,17 @@
     window.QUIZ_DATA = {
       title: "Check your understanding",
       questions: [
+        {
+          prompt: "Why do we need windows at all, instead of just summing everything?",
+          options: [
+            "Windows make the code shorter, nothing more",
+            "A stream never ends, so 'the total so far' keeps changing forever — windows carve it into finite, answerable chunks",
+            "Windows are only needed for testing, not production",
+            "Flink requires a window on every single pipeline",
+          ],
+          correct: 1,
+          explain: "Like catching a bucket of water under a running tap, a window gives you a real number for a slice of an endless stream instead of an unanswerable running total.",
+        },
         {
           prompt: "Why do most real-time applications prefer event time over processing time?",
           options: [
