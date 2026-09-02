@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>10 · Production Architecture Lab — Flink Interactive Guide</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐿️</text></svg>" />
+  <link rel="stylesheet" href="../assets/css/style.css" />
+  <style>
+    .diagram-wrap { overflow-x: auto; }
+    .diagram-wrap svg { display: block; width: 100%; height: auto; min-width: 640px; }
+    .diagram-node rect { fill: var(--bg-elevated-2); stroke: var(--border); stroke-width: 1.5; transition: stroke 0.15s, fill 0.15s; }
+    .diagram-node text { fill: var(--text); font-family: var(--sans); }
+    .diagram-node .role { fill: var(--text-faint); font-size: 9.5px; }
+    .diagram-node { cursor: pointer; }
+    .diagram-node:hover rect, .diagram-node:focus rect { stroke: var(--accent); }
+    .diagram-node.selected rect { stroke: var(--accent); stroke-width: 2.5; fill: var(--bg-elevated); }
+    .diagram-node.active-step rect { stroke: var(--success); stroke-width: 2.5; }
+    .diagram-arrow { stroke: var(--text-faint); stroke-width: 1.5; fill: none; }
+    .diagram-arrow.dashed { stroke-dasharray: 4 3; }
+    .diagram-label { fill: var(--text-faint); font-size: 10px; font-family: var(--mono); }
+    .diagram-boundary rect { fill: none; stroke: var(--border); stroke-width: 1; stroke-dasharray: 5 4; }
+    .diagram-boundary text { fill: var(--text-faint); font-size: 10px; font-weight: 700; letter-spacing: 0.03em; }
+
+    #trace-log { max-height: 160px; overflow-y: auto; font-family: var(--mono); font-size: 0.8rem; color: var(--text-dim); margin-top: 12px; border-top: 1px solid var(--border); padding-top: 10px; }
+    #trace-log div { margin-bottom: 4px; }
+    #trace-log div.ok { color: var(--success); }
+    #trace-log div.fail { color: var(--danger); }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">🐿️</span>
+        Flink Interactive Guide
+      </a>
+      <nav class="nav-links">
+        <a href="../index.html">Home</a>
+        <a href="01-introduction.html">Modules</a>
+        <a href="../cheatsheet.html">Cheatsheet</a>
+        <a href="../CONTRIBUTING.md">Contributing</a>
+        <a href="https://github.com/trishala23/flink-interactive-guide" target="_blank" rel="noopener">GitHub ↗</a>
+        <span class="progress-pill" data-progress-pill></span>
+      </nav>
+      <button class="nav-toggle" aria-label="Toggle menu">☰</button>
+    </div>
+  </header>
+
+  <div class="container module-layout">
+    <aside class="module-sidebar">
+      <h4>Modules</h4>
+      <ol>
+        <li><a data-module-id="introduction" href="01-introduction.html"><span class="dot"></span>01. Introduction</a></li>
+        <li><a data-module-id="architecture" href="02-architecture.html"><span class="dot"></span>02. Architecture</a></li>
+        <li><a data-module-id="datastream-api" href="03-datastream-api.html"><span class="dot"></span>03. DataStream API</a></li>
+        <li><a data-module-id="windows-time" href="04-windows-time.html"><span class="dot"></span>04. Time &amp; Windows</a></li>
+        <li><a data-module-id="state-fault-tolerance" href="05-state-fault-tolerance.html"><span class="dot"></span>05. State &amp; Fault Tolerance</a></li>
+        <li><a data-module-id="table-sql" href="06-table-sql.html"><span class="dot"></span>06. Table API &amp; SQL</a></li>
+        <li><a data-module-id="deployment" href="07-deployment.html"><span class="dot"></span>07. Deployment</a></li>
+        <li><a data-module-id="lab" href="08-lab.html"><span class="dot"></span>08. The Lab</a></li>
+        <li><a data-module-id="connectors" href="09-connectors.html"><span class="dot"></span>09. Connectors Lab</a></li>
+        <li><a data-module-id="production" href="10-production-architecture.html"><span class="dot"></span>10. Production Architecture</a></li>
+      </ol>
+    </aside>
+
+    <main class="module-main">
+      <div class="module-kicker">Module 10 · Capstone</div>
+      <h1>Production Architecture Lab</h1>
+      <p class="intro">
+        Every previous module touched one piece of a real system. This lab
+        assembles a full, realistic production stack out of those pieces —
+        the kind of architecture you'd actually find behind a Flink job
+        running in AWS — and lets you click through every layer and watch
+        a record flow through it.
+      </p>
+
+      <h2>The stack</h2>
+      <table>
+        <thead><tr><th>Layer</th><th>Technology</th></tr></thead>
+        <tbody>
+          <tr><td>Runtime</td><td>Apache Flink 1.20.1 (streaming)</td></tr>
+          <tr><td>Language</td><td>Java 11</td></tr>
+          <tr><td>Build</td><td>Maven + Shade plugin (fat JAR)</td></tr>
+          <tr><td>Messaging</td><td>Kafka (multiple topics) + AWS Kinesis</td></tr>
+          <tr><td>Storage</td><td>AWS DynamoDB</td></tr>
+          <tr><td>Archival / DLQ</td><td>AWS Kinesis Firehose</td></tr>
+          <tr><td>Tracing</td><td>Datadog APM (<code>dd-java-agent</code>)</td></tr>
+          <tr><td>Metrics</td><td>Flink metrics + StatsD protocol</td></tr>
+          <tr><td>Serialization</td><td>Protobuf</td></tr>
+          <tr><td>Deploy</td><td>AWS Managed Service for Apache Flink (MSF/KDA)</td></tr>
+        </tbody>
+      </table>
+      <p style="font-size: 0.88rem; color: var(--text-faint);">
+        Nothing here is a new Flink concept on its own — it's Module 09's
+        sources, Module 03's process functions and side outputs, Module
+        05's state, and Module 07's managed-deployment row, wired together
+        the way a real team actually wires them.
+      </p>
+
+      <h2>The architecture</h2>
+      <p><strong>Click any box</strong> for what it does, why it's the right tool for that spot, and a real code/config snippet.</p>
+
+      <div class="widget">
+        <div class="widget-label">Interactive architecture diagram</div>
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 680 520" role="img" aria-label="Production Flink architecture diagram">
+            <defs>
+              <marker id="arrow10" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0,0 L10,5 L0,10 z" fill="var(--text-faint)" />
+              </marker>
+            </defs>
+
+            <!-- Deployment boundary (drawn first, behind everything) -->
+            <g class="diagram-boundary">
+              <rect x="10" y="100" width="410" height="195" rx="8" />
+              <text x="20" y="116">AWS MANAGED SERVICE FOR APACHE FLINK (MSF)</text>
+            </g>
+
+            <!-- Arrows -->
+            <path class="diagram-arrow" marker-end="url(#arrow10)" d="M95,65 L90,166" />
+            <path class="diagram-arrow" marker-end="url(#arrow10)" d="M265,65 L330,166" />
+            <text class="diagram-label" x="340" y="90">1. produce / publish</text>
+
+            <path class="diagram-arrow dashed" marker-end="url(#arrow10)" d="M210,150 L210,166" />
+            <text class="diagram-label" x="222" y="145">packaged as</text>
+
+            <path class="diagram-arrow" marker-end="url(#arrow10)" d="M90,278 L105,338" />
+            <text class="diagram-label" x="20" y="322">2a. valid → write</text>
+
+            <path class="diagram-arrow" marker-end="url(#arrow10)" d="M330,278 L315,338" />
+            <text class="diagram-label" x="335" y="322">2b. invalid → side output</text>
+
+            <path class="diagram-arrow" marker-end="url(#arrow10)" d="M315,395 L315,438" />
+
+            <path class="diagram-arrow" marker-end="url(#arrow10)" d="M400,193 L438,193" />
+            <text class="diagram-label" x="405" y="185">traces</text>
+
+            <path class="diagram-arrow" marker-end="url(#arrow10)" d="M400,263 L438,263" />
+            <text class="diagram-label" x="405" y="255">metrics</text>
+
+            <!-- Sources -->
+            <g class="diagram-node" data-node="kafka" tabindex="0" role="button">
+              <rect x="20" y="20" width="150" height="45" rx="8" />
+              <text x="95" y="40" text-anchor="middle" font-weight="700" font-size="12.5">Kafka Topics</text>
+              <text class="role" x="95" y="55" text-anchor="middle">orders.raw, orders.retries</text>
+            </g>
+            <g class="diagram-node" data-node="kinesis" tabindex="0" role="button">
+              <rect x="190" y="20" width="150" height="45" rx="8" />
+              <text x="265" y="40" text-anchor="middle" font-weight="700" font-size="12.5">Kinesis Streams</text>
+              <text class="role" x="265" y="55" text-anchor="middle">orders-stream</text>
+            </g>
+
+            <!-- Build -->
+            <g class="diagram-node" data-node="build" tabindex="0" role="button">
+              <rect x="115" y="112" width="190" height="38" rx="7" />
+              <text x="210" y="131" text-anchor="middle" font-weight="700" font-size="11.5">Build: Maven + Shade</text>
+              <text class="role" x="210" y="144" text-anchor="middle">fat JAR</text>
+            </g>
+
+            <!-- Flink Job -->
+            <g class="diagram-node" data-node="flink" tabindex="0" role="button">
+              <rect x="20" y="168" width="380" height="110" rx="9" />
+              <text x="210" y="192" text-anchor="middle" font-weight="700" font-size="13.5">Flink Job</text>
+              <text class="role" x="210" y="208" text-anchor="middle">Flink 1.20.1 · Java 11</text>
+              <text class="role" x="210" y="228" text-anchor="middle">Protobuf deserialize</text>
+              <text class="role" x="210" y="243" text-anchor="middle">→ business logic + keyed state</text>
+              <text class="role" x="210" y="258" text-anchor="middle">→ route by validity</text>
+            </g>
+
+            <!-- Sinks -->
+            <g class="diagram-node" data-node="dynamodb" tabindex="0" role="button">
+              <rect x="20" y="338" width="170" height="55" rx="8" />
+              <text x="105" y="360" text-anchor="middle" font-weight="700" font-size="12.5">DynamoDB</text>
+              <text class="role" x="105" y="376" text-anchor="middle">orders-current-state</text>
+            </g>
+            <g class="diagram-node" data-node="firehose" tabindex="0" role="button">
+              <rect x="230" y="338" width="170" height="55" rx="8" />
+              <text x="315" y="360" text-anchor="middle" font-weight="700" font-size="12.5">Kinesis Firehose</text>
+              <text class="role" x="315" y="376" text-anchor="middle">DLQ / archival</text>
+            </g>
+            <g class="diagram-node" data-node="s3" tabindex="0" role="button">
+              <rect x="230" y="438" width="170" height="48" rx="8" />
+              <text x="315" y="458" text-anchor="middle" font-weight="700" font-size="12.5">S3 Archive</text>
+              <text class="role" x="315" y="473" text-anchor="middle">raw malformed records</text>
+            </g>
+
+            <!-- Observability -->
+            <g class="diagram-node" data-node="datadog" tabindex="0" role="button">
+              <rect x="440" y="168" width="200" height="50" rx="8" />
+              <text x="540" y="189" text-anchor="middle" font-weight="700" font-size="12.5">Datadog APM</text>
+              <text class="role" x="540" y="204" text-anchor="middle">dd-java-agent</text>
+            </g>
+            <g class="diagram-node" data-node="statsd" tabindex="0" role="button">
+              <rect x="440" y="238" width="200" height="50" rx="8" />
+              <text x="540" y="259" text-anchor="middle" font-weight="700" font-size="12.5">Flink Metrics</text>
+              <text class="role" x="540" y="274" text-anchor="middle">StatsD reporter</text>
+            </g>
+          </svg>
+        </div>
+        <div class="result-box" id="arch-detail">Click a box above to see what it does, why it's there, and how it's configured.</div>
+      </div>
+
+      <h2>Trace a record</h2>
+      <p>
+        Send one record through the whole architecture and watch it move —
+        either all the way to DynamoDB, or off to the DLQ if it's malformed.
+      </p>
+
+      <div class="widget">
+        <div class="widget-label">Record trace simulator</div>
+        <div class="controls">
+          <label>Source:
+            <select id="trace-source">
+              <option value="kafka">Kafka</option>
+              <option value="kinesis">Kinesis</option>
+            </select>
+          </label>
+          <label>Record:
+            <select id="trace-validity">
+              <option value="valid">Valid Protobuf</option>
+              <option value="invalid">Malformed / invalid</option>
+            </select>
+          </label>
+          <button class="btn btn-primary btn-sm" id="trace-send">Send record</button>
+          <button class="btn btn-secondary btn-sm" id="trace-reset" disabled>↺ Reset</button>
+        </div>
+        <div id="trace-log"></div>
+      </div>
+
+      <div id="quiz-root" data-module-id="production"></div>
+
+      <nav class="module-pager">
+        <a class="pager-link prev" href="09-connectors.html">
+          <span class="dir">← Previous</span>
+          <span class="title">09. Connectors Lab</span>
+        </a>
+        <a class="pager-link next" href="../cheatsheet.html">
+          <span class="dir">Next</span>
+          <span class="title">Cheatsheet →</span>
+        </a>
+      </nav>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>Flink Interactive Guide — <a href="../index.html">back to overview</a></p>
+    </div>
+  </footer>
+
+  <script src="../assets/js/app.js"></script>
+  <script>
+    (function () {
+      const NODES = {
+        kafka: {
+          name: "Kafka Topics",
+          short: "One of two possible sources for incoming events — a Kafka topic (or several) this job subscribes to via a KafkaSource, exactly like Module 09's Kafka source.",
+          why: "Kafka is usually the system other internal services already publish to, so consuming from it directly avoids adding an extra hop.",
+          code: `KafkaSource<byte[]> kafkaSource = KafkaSource.<byte[]>builder()
+    .setBootstrapServers(bootstrapServers)
+    .setTopics("orders.raw", "orders.retries")
+    .setStartingOffsets(OffsetsInitializer.committedOffsets())
+    .setValueOnlyDeserializer(new ByteArrayDeserializationSchema())
+    .build();`,
+        },
+        kinesis: {
+          name: "Kinesis Streams",
+          short: "The second possible source — an AWS Kinesis Data Stream, consumed via a KinesisStreamsSource, as in Module 09's Kinesis source.",
+          why: "Kinesis is the natural choice when the upstream producer already lives in AWS and would rather not run/operate a Kafka cluster.",
+          code: `KinesisStreamsSource<byte[]> kinesisSource = KinesisStreamsSource.<byte[]>builder()
+    .setStreamArn("arn:aws:kinesis:us-east-1:123456789012:stream/orders-stream")
+    .setDeserializationSchema(new ByteArrayDeserializationSchema())
+    .build();`,
+        },
+        build: {
+          name: "Build: Maven + Shade plugin",
+          short: "Before any of this runs, the job is packaged as one self-contained JAR — the Maven shade plugin bundles the job code plus every dependency (connectors, the Protobuf runtime, the AWS SDK) into a single 'fat' JAR.",
+          why: "AWS Managed Service for Apache Flink expects to deploy one JAR with everything it needs already inside — there's no separate dependency-install step on the runtime. The shade plugin also relocates conflicting classes (e.g. two different library versions) so they don't collide, and merges each dependency's service-registration files so pluggable pieces like connector discovery still work once everything is combined.",
+          code: `<plugin>
+  <groupId>org.apache.maven.plugins</groupId>
+  <artifactId>maven-shade-plugin</artifactId>
+  <executions>
+    <execution>
+      <phase>package</phase>
+      <goals><goal>shade</goal></goals>
+      <configuration>
+        <transformers>
+          <transformer implementation="...ServicesResourceTransformer" />
+        </transformers>
+      </configuration>
+    </execution>
+  </executions>
+</plugin>`,
+        },
+        flink: {
+          name: "Flink Job (Java 11, Flink 1.20.1)",
+          short: "The actual DataStream program: deserializes each record from Protobuf, runs business logic and keyed state (Module 03, Module 05), and routes each result to exactly one of two places depending on whether it parsed successfully.",
+          why: "Java 11 is a long-term-support release with broad library support, and Flink 1.20.1 is a recent stable release — a safe, well-supported pairing for a production workload.",
+          code: `OutputTag<byte[]> dlqTag = new OutputTag<byte[]>("dlq") {};
+
+SingleOutputStreamOperator<OrderEvent> parsed = rawRecords.process(
+    new ProcessFunction<byte[], OrderEvent>() {
+        public void processElement(byte[] bytes, Context ctx, Collector<OrderEvent> out) {
+            try {
+                out.collect(OrderEvent.parseFrom(bytes)); // protobuf
+            } catch (InvalidProtocolBufferException e) {
+                ctx.output(dlqTag, bytes); // malformed -> side output
+            }
+        }
+    });
+
+parsed.getSideOutput(dlqTag).sinkTo(firehoseSink);        // DLQ path
+parsed.keyBy(OrderEvent::getCustomerId)
+      .process(new EnrichAndValidate())
+      .sinkTo(dynamoDbSink);                              // success path`,
+        },
+        dynamodb: {
+          name: "DynamoDB",
+          short: "The success-path sink — validated, processed records land here as the durable, queryable 'current state', externally readable by other services.",
+          why: "DynamoDB gives single-digit-millisecond point lookups by key, which fits a 'look up the latest state for this customer/order' access pattern well, and it scales without you managing servers.",
+          code: `DynamoDbSink<OrderEvent> dynamoSink = DynamoDbSink.<OrderEvent>builder()
+    .setDynamoDbProperties(properties)
+    .setTableName("orders-current-state")
+    .setElementConverter(OrderEvent::toDynamoDbItem)
+    .build();`,
+        },
+        firehose: {
+          name: "Kinesis Firehose (DLQ)",
+          short: "Where records that fail to deserialize or validate are routed instead of being dropped or crashing the job — a dead-letter side output, using the exact side-output mechanism from Module 03's process functions.",
+          why: "Firehose batches and delivers records to S3 automatically with no infrastructure to run — a low-maintenance archive of 'things that went wrong', replayable or inspectable later without slowing the main pipeline down.",
+          code: `KinesisFirehoseSink<byte[]> dlqSink = KinesisFirehoseSink.<byte[]>builder()
+    .setDeliveryStreamName("orders-dlq-archive")
+    .setSerializationSchema(new SimpleStringSchema())
+    .build();`,
+        },
+        s3: {
+          name: "S3 Archive",
+          short: "Firehose's actual destination — raw malformed records land here as files, batched by size or time, ready for manual inspection or a backfill job later.",
+          why: "Keeps 'bad' data recoverable instead of silently lost, without the main job ever waiting on an S3 write directly.",
+          code: `# Firehose delivery stream, buffered before landing in S3
+BufferingHints:
+  SizeInMBs: 5
+  IntervalInSeconds: 60
+S3DestinationConfiguration:
+  BucketARN: arn:aws:s3:::orders-dlq-archive
+  Prefix: "malformed/year=!{timestamp:yyyy}/month=!{timestamp:MM}/"`,
+        },
+        datadog: {
+          name: "Datadog APM",
+          short: "A Java agent attached at JVM startup (no code changes needed) that automatically instruments the job and exports distributed traces — so you can see, per record, how long each stage (deserialize, business logic, DynamoDB write) actually took.",
+          why: "Because it's a javaagent, it hooks in at the bytecode level without the application importing a tracing library, so it's easy to bolt onto an existing job.",
+          code: `-javaagent:/opt/dd-java-agent.jar
+-Ddd.service=orders-flink-job
+-Ddd.env=prod
+-Ddd.trace.enabled=true`,
+        },
+        statsd: {
+          name: "Flink Metrics via StatsD",
+          short: "Flink's own built-in metrics system (checkpoint duration, backpressure, records/sec — Module 07's monitoring content) pushed out over the StatsD protocol, a simple UDP-based push format, into Datadog's metrics pipeline.",
+          why: "Flink already tracks these metrics internally; the StatsD reporter is a lightweight way to ship them out without anyone having to poll for them — Datadog's agent just listens for StatsD packets.",
+          code: `metrics.reporter.dghttp.factory.class: org.apache.flink.metrics.statsd.StatsDReporterFactory
+metrics.reporter.dghttp.host: localhost
+metrics.reporter.dghttp.port: 8125`,
+        },
+      };
+
+      const detail = document.getElementById("arch-detail");
+      const nodeEls = document.querySelectorAll(".diagram-node[data-node]");
+
+      function showNode(id) {
+        const n = NODES[id];
+        nodeEls.forEach((el) => el.classList.toggle("selected", el.getAttribute("data-node") === id));
+        detail.textContent = `${n.name}\n\n${n.short}\n\nWhy this fits here: ${n.why}\n\n${n.code}`;
+        detail.className = "result-box ok";
+      }
+
+      nodeEls.forEach((el) => {
+        const id = el.getAttribute("data-node");
+        el.addEventListener("click", (e) => {
+          e.stopPropagation();
+          showNode(id);
+        });
+        el.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            showNode(id);
+          }
+        });
+      });
+
+      // ---------- Trace simulator ----------
+
+      const sourceSel = document.getElementById("trace-source");
+      const validitySel = document.getElementById("trace-validity");
+      const sendBtn = document.getElementById("trace-send");
+      const resetBtn = document.getElementById("trace-reset");
+      const log = document.getElementById("trace-log");
+      let playTimer = null;
+
+      function buildSteps(source, valid) {
+        const steps = [{ text: `Record arrives via ${source === "kafka" ? "Kafka" : "Kinesis"}`, node: source, cls: "" }];
+        if (!valid) {
+          steps.push({ text: "Protobuf deserialization FAILED — InvalidProtocolBufferException", node: "flink", cls: "fail" });
+          steps.push({ text: "Routed to side output \"dlq\"", node: "flink", cls: "fail" });
+          steps.push({ text: "Delivered to Kinesis Firehose", node: "firehose", cls: "fail" });
+          steps.push({ text: "Archived to S3 (orders-dlq-archive)", node: "s3", cls: "fail" });
+          steps.push({ text: "Datadog span closed: orders.process (status: error)", node: "datadog", cls: "fail" });
+          steps.push({ text: "StatsD metric emitted: records_dlq_total +1", node: "statsd", cls: "fail" });
+        } else {
+          steps.push({ text: "Protobuf deserialization succeeded", node: "flink", cls: "ok" });
+          steps.push({ text: "Business logic + keyed state (keyBy: customerId)", node: "flink", cls: "ok" });
+          steps.push({ text: "Written to DynamoDB (orders-current-state)", node: "dynamodb", cls: "ok" });
+          steps.push({ text: "Datadog span closed: orders.process (~8ms)", node: "datadog", cls: "ok" });
+          steps.push({ text: "StatsD metric emitted: records_processed_total +1", node: "statsd", cls: "ok" });
+        }
+        return steps;
+      }
+
+      function playSteps(steps) {
+        clearInterval(playTimer);
+        log.innerHTML = "";
+        nodeEls.forEach((el) => el.classList.remove("active-step"));
+        let i = 0;
+        playTimer = setInterval(() => {
+          if (i >= steps.length) {
+            clearInterval(playTimer);
+            nodeEls.forEach((el) => el.classList.remove("active-step"));
+            return;
+          }
+          const step = steps[i];
+          nodeEls.forEach((el) => el.classList.toggle("active-step", el.getAttribute("data-node") === step.node));
+          const div = document.createElement("div");
+          if (step.cls) div.className = step.cls;
+          div.textContent = `${i + 1}. ${step.text}`;
+          log.appendChild(div);
+          log.scrollTop = log.scrollHeight;
+          i++;
+        }, 700);
+      }
+
+      sendBtn.addEventListener("click", () => {
+        const steps = buildSteps(sourceSel.value, validitySel.value === "valid");
+        playSteps(steps);
+        resetBtn.disabled = false;
+      });
+
+      resetBtn.addEventListener("click", () => {
+        clearInterval(playTimer);
+        log.innerHTML = "";
+        nodeEls.forEach((el) => el.classList.remove("active-step"));
+        resetBtn.disabled = true;
+      });
+
+      showNode("kafka");
+    })();
+
+    window.QUIZ_DATA = {
+      title: "Check your understanding",
+      questions: [
+        {
+          prompt: "Why does this job need to be packaged as a fat/uber JAR via the Maven shade plugin?",
+          options: [
+            "It's required by Java 11 specifically",
+            "AWS Managed Service for Apache Flink deploys a single JAR with no separate dependency-install step, so everything the job needs must already be bundled inside it",
+            "It makes the code run faster",
+            "It's only needed when using Protobuf",
+          ],
+          correct: 1,
+          explain: "A managed deployment target expects one self-contained artifact — the shade plugin bundles the job and all its dependencies (and resolves class conflicts) into that single JAR.",
+        },
+        {
+          prompt: "What happens to a record that fails Protobuf deserialization in this architecture?",
+          options: [
+            "The whole job crashes",
+            "It's silently dropped",
+            "It's routed to a side output and delivered via Kinesis Firehose to an S3 archive, instead of being lost or blocking the main pipeline",
+            "It's retried forever until it parses",
+          ],
+          correct: 2,
+          explain: "The DLQ pattern here is Module 03's side-output mechanism: bad records are separated out and archived, not dropped or allowed to crash the job.",
+        },
+        {
+          prompt: "Why does DynamoDB fit as the sink here, specifically?",
+          options: [
+            "It's the only sink Flink supports",
+            "It gives fast point lookups by key, which fits serving 'the current state for this customer/order' to other applications",
+            "It's required for Protobuf serialization",
+            "It replaces the need for checkpointing",
+          ],
+          correct: 1,
+          explain: "DynamoDB's low-latency key-value access pattern matches a 'look up current state' use case well — a different job than an analytical query engine would be.",
+        },
+        {
+          prompt: "How does Datadog APM (dd-java-agent) get its tracing data without the job's code importing a tracing library?",
+          options: [
+            "It doesn't — you must manually instrument every function",
+            "It's attached as a Java agent at JVM startup, instrumenting the application at the bytecode level",
+            "It reads the job's source code directly",
+            "It only works with Protobuf-serialized data",
+          ],
+          correct: 1,
+          explain: "A javaagent hooks in before the application's own code runs, instrumenting bytecode automatically — that's what makes it easy to bolt onto an existing job.",
+        },
+      ],
+    };
+  </script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

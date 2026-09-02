@@ -4,13 +4,15 @@ Guidance for Claude (or any AI assistant) working in this repository.
 
 ## What this project is
 
-A free, static, interactive web guide for learning Apache Flink. Nine
+A free, static, interactive web guide for learning Apache Flink. Ten
 modules, each pairing a short theory explanation with a hands-on browser
-widget and a quiz — Module 08 ("The Lab") is a capstone pipeline builder
-and Module 09 ("Connectors Lab") simulates consuming from a Kafka topic
-or Kinesis stream, each with its own small simulation engine. Zero
-backend, zero build step, zero dependencies — deployed as-is to GitHub
-Pages. Read `README.md` for the full feature list and roadmap.
+widget and a quiz — Module 08 ("The Lab") is a capstone pipeline builder,
+Module 09 ("Connectors Lab") simulates consuming from a Kafka topic or
+Kinesis stream, and Module 10 ("Production Architecture Lab") is a
+clickable diagram of a realistic end-to-end production stack with a
+record-trace simulator. Zero backend, zero build step, zero
+dependencies — deployed as-is to GitHub Pages. Read `README.md` for the
+full feature list and roadmap.
 
 ## Hard constraints — do not violate these
 
@@ -32,7 +34,7 @@ Pages. Read `README.md` for the full feature list and roadmap.
 ```
 index.html                    Landing page
 cheatsheet.html                Quick-reference page
-modules/NN-slug.html           One file per module (01 through 09)
+modules/NN-slug.html           One file per module (01 through 10)
 assets/css/style.css           The entire design system — all styling lives here
 assets/js/app.js               Shared: nav, progress tracking, code tabs, active-link highlighting
 assets/js/quiz.js              Generic quiz renderer (data-driven)
@@ -40,6 +42,12 @@ assets/js/sql-playground.js    The mini SQL interpreter used by Module 06 only
 assets/js/lab.js               The pipeline simulation engine used by Module 08 only
 assets/js/connectors-lab.js    The Kafka/Kinesis partition-consumption simulator used by Module 09 only
 ```
+
+Module 10's diagram-click and record-trace logic lives inline in its own
+`<script>` (like Module 02's architecture diagram) rather than a separate
+`assets/js/` file — it's simple enough (deterministic branching, no math
+to get wrong) that a dedicated engine file isn't warranted the way it was
+for Modules 08–09.
 
 Every module page is fully self-contained HTML with its own inline
 `<script>` for widget logic — there is no client-side router and no
