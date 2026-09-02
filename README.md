@@ -9,7 +9,7 @@ JavaScript, no backend, no bundler, deployed straight to GitHub Pages.
 
 ## What's in the guide
 
-Eight modules, each pairing a short plain-English explanation with a
+Nine modules, each pairing a short plain-English explanation with a
 genuine interactive widget and a knowledge-check quiz:
 
 | # | Module | Interactive piece |
@@ -22,6 +22,7 @@ genuine interactive widget and a knowledge-check quiz:
 | 06 | Table API & Flink SQL | A real (small) SQL interpreter running in the browser |
 | 07 | Deployment & Operations | Click-through wizard recommending a deployment mode |
 | 08 | The Lab (capstone) | Build a real pipeline from filter/keyBy/window operators; a small engine actually runs your sample stream through it, event by event, live |
+| 09 | Connectors Lab | Configure a Kafka or Kinesis source and watch partitions/shards actually drain, with live consumer lag |
 
 Plus a [cheatsheet](cheatsheet.html) for quick reference once you've been
 through the modules.
@@ -36,12 +37,12 @@ The guide currently covers the core streaming fundamentals end to end
 (architecture → API → time → state → SQL → deployment). Ideas for future
 modules, roughly in priority order:
 
-- [ ] **Connectors module** — Kafka, filesystem, JDBC sources/sinks, and the connector contract (source splits, sink commit protocol)
+- [ ] **More connectors** — filesystem and JDBC sources/sinks, and the connector contract (source splits, sink commit protocol) beyond what Module 09 covers
 - [ ] **Async I/O & side outputs** — enriching a stream with external lookups without blocking
 - [ ] **CEP (Complex Event Processing)** — pattern matching over a stream with the `flink-cep` library
 - [ ] **Testing Flink jobs** — unit-testing operators, `MiniClusterWithClientResource`, harness-based testing
 - [ ] **A light/dark theme toggle** (currently dark-only by design, to keep initial scope tight)
-- [ ] **A "certificate of completion" view** once all 8 modules are marked done
+- [ ] **A "certificate of completion" view** once all 9 modules are marked done
 - [ ] **More Lab missions** (a join, a session-window mission, a "spot the bug" mission with a pre-built broken pipeline)
 - [ ] Expand the mini SQL playground to support multi-column `GROUP BY` and simple joins
 
@@ -92,13 +93,14 @@ index.html                    Landing page: hero, module grid, progress overview
 cheatsheet.html                Quick-reference tables (DataStream API, CLI, SQL, concepts)
 modules/
   01-introduction.html         ... through ...
-  08-lab.html                  Eight module pages, each theory + widget(s) + quiz
+  09-connectors.html           Nine module pages, each theory + widget(s) + quiz
 assets/
   css/style.css                Shared dark-theme design system
   js/app.js                    Nav, progress tracking (localStorage), code tabs
   js/quiz.js                   Data-driven quiz engine used by every module
   js/sql-playground.js         The mini SQL interpreter used in Module 06
   js/lab.js                    The pipeline simulation engine used in Module 08
+  js/connectors-lab.js         The Kafka/Kinesis partition-consumption simulator used in Module 09
 .github/
   workflows/deploy.yml         GitHub Pages deploy on push to master
   PULL_REQUEST_TEMPLATE.md     PR checklist

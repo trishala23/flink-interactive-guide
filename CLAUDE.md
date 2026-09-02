@@ -4,12 +4,13 @@ Guidance for Claude (or any AI assistant) working in this repository.
 
 ## What this project is
 
-A free, static, interactive web guide for learning Apache Flink. Eight
+A free, static, interactive web guide for learning Apache Flink. Nine
 modules, each pairing a short theory explanation with a hands-on browser
-widget and a quiz — the last one (Module 08, "The Lab") is a capstone
-pipeline builder with its own small simulation engine. Zero backend, zero
-build step, zero dependencies — deployed as-is to GitHub Pages. Read
-`README.md` for the full feature list and roadmap.
+widget and a quiz — Module 08 ("The Lab") is a capstone pipeline builder
+and Module 09 ("Connectors Lab") simulates consuming from a Kafka topic
+or Kinesis stream, each with its own small simulation engine. Zero
+backend, zero build step, zero dependencies — deployed as-is to GitHub
+Pages. Read `README.md` for the full feature list and roadmap.
 
 ## Hard constraints — do not violate these
 
@@ -31,12 +32,13 @@ build step, zero dependencies — deployed as-is to GitHub Pages. Read
 ```
 index.html                    Landing page
 cheatsheet.html                Quick-reference page
-modules/NN-slug.html           One file per module (01 through 08)
+modules/NN-slug.html           One file per module (01 through 09)
 assets/css/style.css           The entire design system — all styling lives here
 assets/js/app.js               Shared: nav, progress tracking, code tabs, active-link highlighting
 assets/js/quiz.js              Generic quiz renderer (data-driven)
 assets/js/sql-playground.js    The mini SQL interpreter used by Module 06 only
 assets/js/lab.js               The pipeline simulation engine used by Module 08 only
+assets/js/connectors-lab.js    The Kafka/Kinesis partition-consumption simulator used by Module 09 only
 ```
 
 Every module page is fully self-contained HTML with its own inline

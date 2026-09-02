@@ -11,6 +11,7 @@ const MODULES = [
   { id: "table-sql", title: "Table API & Flink SQL", file: "06-table-sql.html" },
   { id: "deployment", title: "Deployment & Operations", file: "07-deployment.html" },
   { id: "lab", title: "The Lab", file: "08-lab.html" },
+  { id: "connectors", title: "Connectors Lab", file: "09-connectors.html" },
 ];
 
 function getProgress() {
