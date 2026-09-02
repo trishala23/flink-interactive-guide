@@ -1,0 +1,740 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>08 · The Lab — Flink Interactive Guide</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐿️</text></svg>" />
+  <link rel="stylesheet" href="../assets/css/style.css" />
+  <style>
+    .mode-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 18px 0; }
+    .mode-tab { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 999px; padding: 8px 16px; font-size: 0.85rem; color: var(--text-dim); cursor: pointer; font-family: inherit; }
+    .mode-tab.active { background: var(--accent-gradient); color: #06090f; font-weight: 600; border-color: transparent; }
+
+    .goal-list { margin: 10px 0 0; padding-left: 20px; }
+    .goal-list li { color: var(--text-dim); font-size: 0.9rem; margin-bottom: 4px; }
+
+    .pipeline-row { display: flex; align-items: stretch; gap: 8px; flex-wrap: wrap; margin: 18px 0; position: relative; }
+    .pipe-card { background: var(--bg-elevated-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; min-width: 150px; max-width: 190px; position: relative; }
+    .pipe-card.source, .pipe-card.sink { background: var(--bg-elevated); border-style: dashed; }
+    .pipe-card .op-type { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); font-weight: 700; }
+    .pipe-card .op-config { font-size: 0.82rem; color: var(--text); margin: 4px 0 6px; word-break: break-word; }
+    .pipe-card .op-stat { font-size: 0.76rem; color: var(--text-faint); font-family: var(--mono); min-height: 16px; }
+    .pipe-card .op-actions { position: absolute; top: 6px; right: 6px; display: flex; gap: 2px; }
+    .pipe-card .op-actions button { background: none; border: none; color: var(--text-faint); cursor: pointer; font-size: 0.75rem; padding: 2px 4px; line-height: 1; }
+    .pipe-card .op-actions button:hover { color: var(--text); }
+    .pipe-card.flash-pass { border-color: var(--success); }
+    .pipe-card.flash-drop { border-color: var(--danger); }
+    .pipe-arrow { align-self: center; color: var(--text-faint); font-size: 1.1rem; }
+
+    .add-op-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+    #op-form { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px; margin-top: 12px; display: none; }
+    #op-form .controls { margin-bottom: 0; }
+    #op-form label { display: flex; flex-direction: column; gap: 4px; font-size: 0.78rem; color: var(--text-faint); align-items: flex-start; }
+
+    .event-card { background: var(--bg-elevated); border: 1px solid var(--accent); border-radius: var(--radius-sm); padding: 10px 14px; font-family: var(--mono); font-size: 0.82rem; margin: 14px 0; min-height: 20px; }
+
+    #lab-sink-table { margin-top: 10px; }
+    #lab-sink-table table { font-size: 0.85rem; }
+
+    #lab-code { font-size: 0.8rem; }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">🐿️</span>
+        Flink Interactive Guide
+      </a>
+      <nav class="nav-links">
+        <a href="../index.html">Home</a>
+        <a href="01-introduction.html">Modules</a>
+        <a href="../cheatsheet.html">Cheatsheet</a>
+        <a href="../CONTRIBUTING.md">Contributing</a>
+        <a href="https://github.com/trishala23/flink-interactive-guide" target="_blank" rel="noopener">GitHub ↗</a>
+        <span class="progress-pill" data-progress-pill></span>
+      </nav>
+      <button class="nav-toggle" aria-label="Toggle menu">☰</button>
+    </div>
+  </header>
+
+  <div class="container module-layout">
+    <aside class="module-sidebar">
+      <h4>Modules</h4>
+      <ol>
+        <li><a data-module-id="introduction" href="01-introduction.html"><span class="dot"></span>01. Introduction</a></li>
+        <li><a data-module-id="architecture" href="02-architecture.html"><span class="dot"></span>02. Architecture</a></li>
+        <li><a data-module-id="datastream-api" href="03-datastream-api.html"><span class="dot"></span>03. DataStream API</a></li>
+        <li><a data-module-id="windows-time" href="04-windows-time.html"><span class="dot"></span>04. Time &amp; Windows</a></li>
+        <li><a data-module-id="state-fault-tolerance" href="05-state-fault-tolerance.html"><span class="dot"></span>05. State &amp; Fault Tolerance</a></li>
+        <li><a data-module-id="table-sql" href="06-table-sql.html"><span class="dot"></span>06. Table API &amp; SQL</a></li>
+        <li><a data-module-id="deployment" href="07-deployment.html"><span class="dot"></span>07. Deployment</a></li>
+        <li><a data-module-id="lab" href="08-lab.html"><span class="dot"></span>08. The Lab</a></li>
+      </ol>
+    </aside>
+
+    <main class="module-main">
+      <div class="module-kicker">Module 08 · Capstone</div>
+      <h1>The Lab — Build a Flink Pipeline</h1>
+      <p class="intro">
+        Everything from Modules 03–06 in one place: build a real pipeline
+        out of filter, keyBy, and windowed-aggregate operators, then watch
+        the same fixed <code>orders</code> stream from Module 06 flow
+        through it, one event at a time, in real time.
+      </p>
+
+      <div class="callout">
+        <strong>How this works:</strong> pick a mission below (or go
+        freeform in Sandbox mode), build your pipeline from the operator
+        palette, then step through the stream and watch each operator
+        card update live. Nothing here is faked — the same small engine
+        that renders the pipeline also computes the real aggregate
+        results, so what you see is what your pipeline actually does.
+      </div>
+
+      <h2>1. Choose a mission</h2>
+      <div class="mode-tabs" id="mode-tabs">
+        <button class="mode-tab active" data-mode="big-spender">Mission 1: Big Spender Alert</button>
+        <button class="mode-tab" data-mode="category-sales">Mission 2: 5-Second Category Sales</button>
+        <button class="mode-tab" data-mode="sandbox">Sandbox (free build)</button>
+      </div>
+      <div class="widget" id="mission-panel"></div>
+
+      <h2>2. Build your pipeline</h2>
+      <p style="font-size: 0.88rem; color: var(--text-faint);">
+        Table: <code>orders(id, customer, category, amount, t)</code> — the
+        same 12 sample rows as Module 06, plus an event-time <code>t</code>
+        (seconds) for windowing.
+      </p>
+      <div class="widget">
+        <div class="widget-label">Pipeline builder</div>
+        <div class="pipeline-row" id="pipeline-row"></div>
+        <div class="add-op-bar">
+          <button class="btn btn-secondary btn-sm" data-add="filter">+ Filter</button>
+          <button class="btn btn-secondary btn-sm" data-add="map">+ Map</button>
+          <button class="btn btn-secondary btn-sm" data-add="keyBy">+ KeyBy</button>
+          <button class="btn btn-secondary btn-sm" data-add="aggregate" id="add-agg-btn">+ Window &amp; Aggregate</button>
+        </div>
+        <div id="op-form"></div>
+      </div>
+
+      <h2>3. Run it and watch</h2>
+      <div class="widget">
+        <div class="widget-label">Live run</div>
+        <div class="controls">
+          <button class="btn btn-primary btn-sm" id="lab-run">▶ Start run</button>
+          <button class="btn btn-secondary btn-sm" id="lab-next" disabled>Next event →</button>
+          <button class="btn btn-secondary btn-sm" id="lab-play" disabled>▶ Auto-play</button>
+          <button class="btn btn-secondary btn-sm" id="lab-reset" disabled>↺ Reset</button>
+          <span class="op-stat" id="lab-progress"></span>
+        </div>
+        <div class="event-card" id="lab-event-card">Click "Start run" to begin sending events through your pipeline.</div>
+        <p style="font-size: 0.8rem; color: var(--text-faint); margin: 0 0 4px;">Sink output:</p>
+        <div id="lab-sink-table"><p style="color: var(--text-faint); font-size: 0.85rem; margin:0;">No results yet.</p></div>
+      </div>
+
+      <div class="controls">
+        <button class="btn btn-secondary btn-sm" id="lab-check">Check mission</button>
+      </div>
+      <div class="result-box" id="lab-check-result" style="display:none;"></div>
+
+      <h2>Equivalent Flink code</h2>
+      <p style="font-size: 0.88rem; color: var(--text-faint);">
+        Updates live as you build — this is the DataStream API code
+        (Module 03) your pipeline corresponds to.
+      </p>
+      <pre id="lab-code"><code>orders.print(); // add operators above to see real code here</code></pre>
+
+      <div id="quiz-root" data-module-id="lab"></div>
+
+      <nav class="module-pager">
+        <a class="pager-link prev" href="07-deployment.html">
+          <span class="dir">← Previous</span>
+          <span class="title">07. Deployment &amp; Operations</span>
+        </a>
+        <a class="pager-link next" href="../cheatsheet.html">
+          <span class="dir">Next</span>
+          <span class="title">Cheatsheet →</span>
+        </a>
+      </nav>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>Flink Interactive Guide — <a href="../index.html">back to overview</a></p>
+    </div>
+  </footer>
+
+  <script src="../assets/js/app.js"></script>
+  <script src="../assets/js/lab.js"></script>
+  <script>
+    (function () {
+      let mode = "big-spender";
+      let pipeline = [];
+      let opIdSeq = 0;
+      let runResult = null;
+      let stepIndex = 0;
+      let playTimer = null;
+
+      const FIELD_OPTIONS = {
+        amount: { type: "number", ops: [">", "<", ">=", "<=", "=", "!="] },
+        category: { type: "select", values: ["Electronics", "Books", "Toys"], ops: ["=", "!="] },
+        customer: { type: "select", values: ["Alice", "Bob", "Carol", "Dave"], ops: ["=", "!="] },
+      };
+
+      const missionPanel = document.getElementById("mission-panel");
+      const pipelineRow = document.getElementById("pipeline-row");
+      const opForm = document.getElementById("op-form");
+      const addAggBtn = document.getElementById("add-agg-btn");
+      const runBtn = document.getElementById("lab-run");
+      const nextBtn = document.getElementById("lab-next");
+      const playBtn = document.getElementById("lab-play");
+      const resetBtn = document.getElementById("lab-reset");
+      const checkBtn = document.getElementById("lab-check");
+      const checkResult = document.getElementById("lab-check-result");
+      const progressEl = document.getElementById("lab-progress");
+      const eventCard = document.getElementById("lab-event-card");
+      const sinkTable = document.getElementById("lab-sink-table");
+      const codeEl = document.getElementById("lab-code");
+
+      function newOpId() {
+        return "op" + opIdSeq++;
+      }
+
+      // ---------- Mission / mode panel ----------
+
+      function renderMissionPanel() {
+        missionPanel.innerHTML = "";
+        if (mode === "sandbox") {
+          const p = document.createElement("p");
+          p.style.margin = "0";
+          p.innerHTML =
+            "<strong>Sandbox mode.</strong> No mission to complete — build anything. " +
+            "Try: filter to just \"Electronics\", keyBy customer, running average. " +
+            "Or: no filter, keyBy category, tumbling 3s count.";
+          missionPanel.appendChild(p);
+          return;
+        }
+        const m = LAB_MISSIONS[mode];
+        const title = document.createElement("h3");
+        title.style.marginTop = "0";
+        title.textContent = m.title;
+        const scenario = document.createElement("p");
+        scenario.textContent = m.scenario;
+        const goalList = document.createElement("ol");
+        goalList.className = "goal-list";
+        m.goal.forEach((g) => {
+          const li = document.createElement("li");
+          li.textContent = g;
+          goalList.appendChild(li);
+        });
+        missionPanel.appendChild(title);
+        missionPanel.appendChild(scenario);
+        missionPanel.appendChild(goalList);
+      }
+
+      document.getElementById("mode-tabs").addEventListener("click", (e) => {
+        const btn = e.target.closest(".mode-tab");
+        if (!btn) return;
+        document.querySelectorAll(".mode-tab").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        mode = btn.dataset.mode;
+        renderMissionPanel();
+        checkResult.style.display = "none";
+      });
+
+      // ---------- Pipeline builder ----------
+
+      function opSummary(op) {
+        if (op.type === "filter") return `${op.field} ${op.op} ${op.value}`;
+        if (op.type === "map") return LAB_MAP_PRESETS[op.preset].label;
+        if (op.type === "keyBy") return `key: ${op.field}`;
+        if (op.type === "aggregate") {
+          const win = op.windowed ? `tumbling ${op.windowSize}s` : "running (no window)";
+          return `${op.fn}(${op.fn === "count" ? "*" : "amount"}) — ${win}`;
+        }
+        return "";
+      }
+
+      function opLabel(type) {
+        return { filter: "Filter", map: "Map", keyBy: "KeyBy", aggregate: "Window & Aggregate" }[type];
+      }
+
+      function renderPipeline() {
+        pipelineRow.innerHTML = "";
+
+        const source = document.createElement("div");
+        source.className = "pipe-card source";
+        source.innerHTML = '<div class="op-type">Source</div><div class="op-config">orders</div><div class="op-stat" id="stat-source"></div>';
+        pipelineRow.appendChild(source);
+
+        pipeline.forEach((op, idx) => {
+          pipelineRow.appendChild(arrow());
+          const card = document.createElement("div");
+          card.className = "pipe-card";
+          card.dataset.opId = op.id;
+          card.innerHTML = `
+            <div class="op-actions">
+              <button data-act="up" title="Move earlier">↑</button>
+              <button data-act="down" title="Move later">↓</button>
+              <button data-act="remove" title="Remove">✕</button>
+            </div>
+            <div class="op-type">${opLabel(op.type)}</div>
+            <div class="op-config">${opSummary(op)}</div>
+            <div class="op-stat" data-stat-for="${op.id}"></div>
+          `;
+          card.querySelector('[data-act="remove"]').addEventListener("click", () => {
+            pipeline = pipeline.filter((o) => o.id !== op.id);
+            afterPipelineChange();
+          });
+          card.querySelector('[data-act="up"]').addEventListener("click", () => {
+            if (idx > 0) {
+              [pipeline[idx - 1], pipeline[idx]] = [pipeline[idx], pipeline[idx - 1]];
+              afterPipelineChange();
+            }
+          });
+          card.querySelector('[data-act="down"]').addEventListener("click", () => {
+            if (idx < pipeline.length - 1) {
+              [pipeline[idx + 1], pipeline[idx]] = [pipeline[idx], pipeline[idx + 1]];
+              afterPipelineChange();
+            }
+          });
+          pipelineRow.appendChild(card);
+        });
+
+        pipelineRow.appendChild(arrow());
+        const sink = document.createElement("div");
+        sink.className = "pipe-card sink";
+        sink.innerHTML = '<div class="op-type">Sink</div><div class="op-config">output</div><div class="op-stat" id="stat-sink"></div>';
+        pipelineRow.appendChild(sink);
+
+        addAggBtn.disabled = pipeline.some((o) => o.type === "aggregate");
+      }
+
+      function arrow() {
+        const a = document.createElement("div");
+        a.className = "pipe-arrow";
+        a.textContent = "→";
+        return a;
+      }
+
+      function afterPipelineChange() {
+        renderPipeline();
+        renderCode();
+        resetRun();
+      }
+
+      // ---------- Add-operator form ----------
+
+      document.querySelectorAll("[data-add]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          if (btn.disabled) return;
+          openOpForm(btn.dataset.add);
+        });
+      });
+
+      function openOpForm(type) {
+        opForm.style.display = "block";
+        opForm.innerHTML = "";
+        const heading = document.createElement("div");
+        heading.style.cssText = "font-size:0.8rem; font-weight:700; color:var(--text); margin-bottom:10px;";
+        heading.textContent = `Add ${opLabel(type)}`;
+        opForm.appendChild(heading);
+
+        const row = document.createElement("div");
+        row.className = "controls";
+
+        if (type === "filter") {
+          const fieldSelect = selectEl("field", ["amount", "category", "customer"]);
+          const opSelect = selectEl("op", FIELD_OPTIONS.amount.ops);
+          const valueWrap = document.createElement("div");
+
+          function renderValueInput() {
+            valueWrap.innerHTML = "";
+            const fieldMeta = FIELD_OPTIONS[fieldSelect.value];
+            opSelect.innerHTML = "";
+            fieldMeta.ops.forEach((o) => opSelect.appendChild(new Option(o, o)));
+            const label = document.createElement("label");
+            const span = document.createElement("span");
+            span.textContent = "Value";
+            label.appendChild(span);
+            let input;
+            if (fieldMeta.type === "number") {
+              input = document.createElement("input");
+              input.type = "number";
+              input.id = "value";
+              input.value = 100;
+              input.style.width = "90px";
+            } else {
+              input = document.createElement("select");
+              input.id = "value";
+              fieldMeta.values.forEach((v) => input.appendChild(new Option(v, v)));
+            }
+            label.appendChild(input);
+            valueWrap.appendChild(label);
+          }
+
+          fieldSelect.addEventListener("change", renderValueInput);
+          renderValueInput();
+
+          row.appendChild(wrapLabel("Field", fieldSelect));
+          row.appendChild(wrapLabel("Comparison", opSelect));
+          row.appendChild(valueWrap);
+          opForm.appendChild(row);
+
+          addFormButtons(() => {
+            const field = fieldSelect.value;
+            const op = opSelect.value;
+            const rawValue = valueWrap.querySelector("#value").value;
+            const value = FIELD_OPTIONS[field].type === "number" ? Number(rawValue) : rawValue;
+            pipeline.push({ id: newOpId(), type: "filter", field, op, value });
+            closeOpForm();
+            afterPipelineChange();
+          });
+        }
+
+        if (type === "map") {
+          const presetSelect = selectEl("preset", Object.keys(LAB_MAP_PRESETS), (k) => LAB_MAP_PRESETS[k].label);
+          row.appendChild(wrapLabel("Transform", presetSelect));
+          opForm.appendChild(row);
+          addFormButtons(() => {
+            pipeline.push({ id: newOpId(), type: "map", preset: presetSelect.value });
+            closeOpForm();
+            afterPipelineChange();
+          });
+        }
+
+        if (type === "keyBy") {
+          const fieldSelect = selectEl("field", ["customer", "category"]);
+          row.appendChild(wrapLabel("Key by", fieldSelect));
+          opForm.appendChild(row);
+          addFormButtons(() => {
+            pipeline.push({ id: newOpId(), type: "keyBy", field: fieldSelect.value });
+            closeOpForm();
+            afterPipelineChange();
+          });
+        }
+
+        if (type === "aggregate") {
+          const fnSelect = selectEl("fn", ["sum", "count", "avg", "min", "max"]);
+          const windowedSelect = selectEl("windowed", ["no", "yes"], (v) => (v === "yes" ? "Tumbling window" : "No window (running total)"));
+          const sizeSelect = selectEl("size", ["3", "5", "8"], (v) => v + "s");
+          const sizeWrap = wrapLabel("Window size", sizeSelect);
+          sizeWrap.style.display = "none";
+          windowedSelect.addEventListener("change", (e) => {
+            sizeWrap.style.display = e.target.value === "yes" ? "flex" : "none";
+          });
+
+          row.appendChild(wrapLabel("Aggregate", fnSelect));
+          row.appendChild(wrapLabel("Window?", windowedSelect));
+          row.appendChild(sizeWrap);
+          opForm.appendChild(row);
+
+          addFormButtons(() => {
+            const fn = fnSelect.value;
+            const windowed = windowedSelect.value === "yes";
+            const windowSize = windowed ? Number(sizeSelect.value) : null;
+            pipeline.push({ id: newOpId(), type: "aggregate", fn, windowed, windowSize });
+            closeOpForm();
+            afterPipelineChange();
+          });
+        }
+      }
+
+      function selectEl(id, options, labelFn) {
+        const sel = document.createElement("select");
+        sel.id = id;
+        options.forEach((o) => sel.appendChild(new Option(labelFn ? labelFn(o) : o, o)));
+        return sel;
+      }
+
+      function wrapLabel(text, selectNode) {
+        const label = document.createElement("label");
+        const span = document.createElement("span");
+        span.textContent = text;
+        label.appendChild(span);
+        label.appendChild(selectNode);
+        return label;
+      }
+
+      function addFormButtons(onAdd) {
+        const btnRow = document.createElement("div");
+        btnRow.style.marginTop = "12px";
+        const addBtn = document.createElement("button");
+        addBtn.className = "btn btn-primary btn-sm";
+        addBtn.textContent = "Add to pipeline";
+        addBtn.style.marginRight = "8px";
+        addBtn.addEventListener("click", onAdd);
+        const cancelBtn = document.createElement("button");
+        cancelBtn.className = "btn btn-secondary btn-sm";
+        cancelBtn.textContent = "Cancel";
+        cancelBtn.addEventListener("click", closeOpForm);
+        btnRow.appendChild(addBtn);
+        btnRow.appendChild(cancelBtn);
+        opForm.appendChild(btnRow);
+      }
+
+      function closeOpForm() {
+        opForm.style.display = "none";
+        opForm.innerHTML = "";
+      }
+
+      // ---------- Code panel ----------
+
+      function renderCode() {
+        codeEl.textContent = pipeline.length ? generateLabCode(pipeline) : 'orders.print(); // add operators above to see real code here';
+      }
+
+      // ---------- Run / step / animate ----------
+
+      function clearOpCounters() {
+        pipeline.forEach((op) => {
+          delete op._pass;
+          delete op._drop;
+          delete op._count;
+          delete op._keys;
+        });
+      }
+
+      function resetRun() {
+        runResult = null;
+        stepIndex = 0;
+        runFinished = false;
+        sinkResults = [];
+        clearOpCounters();
+        clearInterval(playTimer);
+        playTimer = null;
+        nextBtn.disabled = true;
+        playBtn.disabled = true;
+        resetBtn.disabled = true;
+        playBtn.textContent = "▶ Auto-play";
+        eventCard.textContent = 'Click "Start run" to begin sending events through your pipeline.';
+        progressEl.textContent = "";
+        sinkTable.innerHTML = '<p style="color: var(--text-faint); font-size: 0.85rem; margin:0;">No results yet.</p>';
+        document.querySelectorAll(".op-stat[data-stat-for]").forEach((el) => (el.textContent = ""));
+        const statSource = document.getElementById("stat-source");
+        const statSink = document.getElementById("stat-sink");
+        if (statSource) statSource.textContent = "";
+        if (statSink) statSink.textContent = "";
+        document.querySelectorAll(".pipe-card").forEach((c) => c.classList.remove("flash-pass", "flash-drop"));
+      }
+
+      runBtn.addEventListener("click", () => {
+        if (pipeline.length === 0) {
+          eventCard.textContent = "Add at least one operator before running.";
+          return;
+        }
+        runResult = runPipeline(pipeline);
+        stepIndex = 0;
+        runFinished = false;
+        clearOpCounters();
+        nextBtn.disabled = false;
+        playBtn.disabled = false;
+        resetBtn.disabled = false;
+        sinkTable.innerHTML = "";
+        sinkResults = [];
+        eventCard.textContent = "Ready — click Next event, or Auto-play.";
+        updateProgress();
+      });
+
+      resetBtn.addEventListener("click", resetRun);
+
+      nextBtn.addEventListener("click", stepOnce);
+
+      playBtn.addEventListener("click", () => {
+        if (playTimer) {
+          clearInterval(playTimer);
+          playTimer = null;
+          playBtn.textContent = "▶ Auto-play";
+          return;
+        }
+        playBtn.textContent = "⏸ Pause";
+        playTimer = setInterval(() => {
+          if (!stepOnce()) {
+            clearInterval(playTimer);
+            playTimer = null;
+            playBtn.textContent = "▶ Auto-play";
+          }
+        }, 900);
+      });
+
+      let sinkResults = [];
+
+      function updateProgress() {
+        progressEl.textContent = runResult ? `${stepIndex} / ${runResult.trace.length} events` : "";
+      }
+
+      function stepOnce() {
+        if (!runResult || stepIndex >= runResult.trace.length) {
+          finishRun();
+          return false;
+        }
+        const step = runResult.trace[stepIndex];
+        eventCard.textContent = `#${step.event.id}  {customer: "${step.event.customer}", category: "${step.event.category}", amount: ${step.event.amount}, t: ${step.event.t}}` + (step.alive ? "" : "  — dropped");
+
+        document.querySelectorAll(".pipe-card").forEach((c) => c.classList.remove("flash-pass", "flash-drop"));
+        const statSource = document.getElementById("stat-source");
+        if (statSource) statSource.textContent = `${stepIndex + 1}/${runResult.trace.length} sent`;
+
+        step.stages.forEach((s) => {
+          const statEl = document.querySelector(`[data-stat-for="${s.opId}"]`);
+          const card = document.querySelector(`.pipe-card[data-op-id="${s.opId}"]`);
+          const op = pipeline.find((o) => o.id === s.opId);
+          if (!statEl || !op) return;
+
+          if (op.type === "filter") {
+            op._pass = (op._pass || 0) + (s.outcome === "pass" ? 1 : 0);
+            op._drop = (op._drop || 0) + (s.outcome === "drop" ? 1 : 0);
+            statEl.textContent = `✓${op._pass}  ✗${op._drop}`;
+            if (card) card.classList.add(s.outcome === "pass" ? "flash-pass" : s.outcome === "drop" ? "flash-drop" : "");
+          } else if (op.type === "map") {
+            op._count = (op._count || 0) + (s.outcome === "transform" ? 1 : 0);
+            statEl.textContent = `${op._count} transformed`;
+          } else if (op.type === "keyBy") {
+            op._keys = op._keys || new Set();
+            if (s.outcome === "key") op._keys.add(s.detail);
+            statEl.textContent = op._keys.size ? `keys: ${Array.from(op._keys).join(", ")}` : "";
+          }
+        });
+
+        const aggOp = pipeline.find((o) => o.type === "aggregate");
+        if (aggOp) {
+          const statEl = document.querySelector(`[data-stat-for="${aggOp.id}"]`);
+          const emits = runResult.aggEmits.filter((e) => e.triggeredByEventId === step.event.id);
+          emits.forEach(revealSinkResult);
+          if (statEl) statEl.textContent = `${runResult.aggEmits.filter((e) => e.triggeredByEventId !== "end" && parseInt(e.triggeredByEventId) <= step.event.id).length} results so far`;
+        } else if (step.alive) {
+          revealSinkPassthrough(step.record);
+        }
+
+        stepIndex++;
+        updateProgress();
+
+        if (stepIndex >= runResult.trace.length) {
+          finishRun();
+          return false;
+        }
+        return true;
+      }
+
+      let runFinished = false;
+
+      function finishRun() {
+        if (!runResult || runFinished) return;
+        runFinished = true;
+        const aggOp = pipeline.find((o) => o.type === "aggregate");
+        if (aggOp && aggOp.windowed) {
+          runResult.aggEmits.filter((e) => e.triggeredByEventId === "end").forEach(revealSinkResult);
+        }
+        nextBtn.disabled = true;
+        eventCard.textContent += "  — stream finished.";
+      }
+
+      function revealSinkResult(emit) {
+        sinkResults.push(emit);
+        renderSinkTable(true);
+      }
+
+      function revealSinkPassthrough(record) {
+        sinkResults.push(record);
+        renderSinkTable(false);
+      }
+
+      function renderSinkTable(isAgg) {
+        if (sinkResults.length === 0) {
+          sinkTable.innerHTML = '<p style="color: var(--text-faint); font-size: 0.85rem; margin:0;">No results yet.</p>';
+          return;
+        }
+        const table = document.createElement("table");
+        if (isAgg) {
+          table.innerHTML = `<thead><tr><th>Key</th><th>Window</th><th>Value</th></tr></thead>`;
+          const tbody = document.createElement("tbody");
+          sinkResults.forEach((r) => {
+            const tr = document.createElement("tr");
+            const win = r.windowed ? `[${r.windowStart}s–${r.windowEnd}s)` : "—";
+            const keyLabel = r.key === "__all__" ? "(all, no keyBy)" : r.key;
+            tr.innerHTML = `<td>${keyLabel}</td><td>${win}</td><td>${r.value}</td>`;
+            tbody.appendChild(tr);
+          });
+          table.appendChild(tbody);
+        } else {
+          table.innerHTML = `<thead><tr><th>id</th><th>customer</th><th>category</th><th>amount</th></tr></thead>`;
+          const tbody = document.createElement("tbody");
+          sinkResults.forEach((r) => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `<td>${r.id}</td><td>${r.customer}</td><td>${r.category}</td><td>${r.amount}</td>`;
+            tbody.appendChild(tr);
+          });
+          table.appendChild(tbody);
+        }
+        sinkTable.innerHTML = "";
+        sinkTable.appendChild(table);
+      }
+
+      // ---------- Mission check ----------
+
+      checkBtn.addEventListener("click", () => {
+        if (mode === "sandbox") {
+          checkResult.textContent = "Sandbox mode has no mission to check — just experiment freely.";
+          checkResult.className = "result-box";
+          checkResult.style.display = "block";
+          return;
+        }
+        const result = LAB_MISSIONS[mode].validate(pipeline);
+        checkResult.textContent = result.message;
+        checkResult.className = "result-box " + (result.ok ? "ok" : "err");
+        checkResult.style.display = "block";
+        if (result.ok) setModuleComplete("lab");
+      });
+
+      // ---------- Init ----------
+
+      renderMissionPanel();
+      renderPipeline();
+      renderCode();
+    })();
+
+    window.QUIZ_DATA = {
+      title: "Check your understanding",
+      questions: [
+        {
+          prompt: "Why does the order filter → keyBy → aggregate matter, rather than keyBy → filter → aggregate?",
+          options: [
+            "It doesn't matter, Flink reorders operators automatically",
+            "Filtering first means less data flows into the (usually more expensive) keyed/windowed stages downstream",
+            "keyBy can only be the very first operator in any pipeline",
+            "Filters can only run after a window closes",
+          ],
+          correct: 1,
+          explain: "Operators run in the order you chain them; putting a cheap filter before expensive stateful stages means less work happens downstream — same reasoning as Module 03's transformation table.",
+        },
+        {
+          prompt: "In the Lab, when does a tumbling-window aggregate actually emit a result for a given key?",
+          options: [
+            "Immediately after every single event for that key",
+            "Only once, after all events have been seen",
+            "When a later event for that key arrives with a timestamp in the next window, or when the stream ends",
+            "Every 100 milliseconds regardless of event time",
+          ],
+          correct: 2,
+          explain: "This mirrors Module 04's watermark idea: a window fires once time has moved past its end — approximated here by 'the next event for that key belongs to a later window'.",
+        },
+        {
+          prompt: "What's the practical difference between a running (non-windowed) sum and a windowed sum, as seen in the Lab's sink output?",
+          options: [
+            "They always produce the exact same output",
+            "A running sum emits one updated total per surviving event; a windowed sum emits one total per key per window",
+            "A windowed sum only works with the count function",
+            "A running sum can only be used with keyBy on category",
+          ],
+          correct: 1,
+          explain: "Running sum keeps accumulating forever, updating on every event (Module 03's keyBy().sum() semantics); a windowed sum resets and emits once per finished window per key (Module 04).",
+        },
+      ],
+    };
+  </script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

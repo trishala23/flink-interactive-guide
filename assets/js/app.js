@@ -10,6 +10,7 @@ const MODULES = [
   { id: "state-fault-tolerance", title: "State & Fault Tolerance", file: "05-state-fault-tolerance.html" },
   { id: "table-sql", title: "Table API & Flink SQL", file: "06-table-sql.html" },
   { id: "deployment", title: "Deployment & Operations", file: "07-deployment.html" },
+  { id: "lab", title: "The Lab", file: "08-lab.html" },
 ];
 
 function getProgress() {
