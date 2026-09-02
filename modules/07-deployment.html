@@ -114,20 +114,95 @@
       <p>
         The <strong>Flink Web UI</strong> (served by the Dispatcher, from
         Module 02) is your window into the kitchen while it's running:
-        jobs in progress, the operator graph, and checkpoint history. It
-        also shows <strong>backpressure</strong> — a simple idea despite
-        the name: if one cook is too slow, everyone feeding work to that
-        cook has to slow down too, the same way a slow cash register
-        backs up the whole checkout line behind it. High backpressure
-        means a downstream step can't keep up.
+        jobs in progress, the operator graph, and checkpoint history. Two
+        signals there matter more than the rest, because they're usually
+        how you first notice something's wrong — and they're closely
+        related to each other.
+      </p>
+
+      <h3>Backpressure — a slow step forcing everyone upstream to slow down</h3>
+      <p>
+        Picture a busy kitchen line: if the cook plating dishes is slow,
+        the cooks before them can't hand off finished food fast enough
+        either — they're forced to slow down too, all the way back up the
+        line, the same way a slow cash register backs up an entire
+        checkout queue behind it. That's backpressure: when one operator
+        can't keep up, every operator feeding it is forced to slow down
+        to match, rippling backward through the whole pipeline.
       </p>
       <p>
+        This isn't a bug — it's Flink deliberately choosing to slow down
+        rather than either dropping data or letting an overloaded
+        operator's memory balloon out of control. The trade-off is that a
+        slowdown anywhere becomes a slowdown everywhere upstream of it,
+        including all the way back to the source.
+      </p>
+      <table>
+        <thead><tr><th>Question</th><th>Answer</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>What usually causes it?</td>
+            <td>One operator doing something expensive per record (a slow external API call, heavy computation), <strong>data skew</strong> (one key gets far more traffic than others, overloading a single subtask while others sit idle), or a slow sink (e.g. a struggling database on the other end).</td>
+          </tr>
+          <tr>
+            <td>Where do you see it?</td>
+            <td>The Flink Web UI flags the specific operator that's "busy" (spending its time actually processing, unable to keep up) directly in the job graph — you don't have to guess which step is the bottleneck.</td>
+          </tr>
+          <tr>
+            <td>How do you fix it?</td>
+            <td>Once you know <em>which</em> operator is the bottleneck: give it more parallelism (Module 02's slots), fix key skew so work is spread more evenly, or speed up/scale whatever slow external system it's waiting on.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Consumer lag — how far behind the source you are</h3>
+      <p>
+        If your source is Kafka, think of new messages arriving as a
+        stack of incoming orders piling up at the kitchen door.
+        <strong>Consumer lag</strong> is simply the size of that pile: how
+        many messages (or how much time) sit between the newest message
+        Kafka has and the last one your job has actually finished
+        processing. Zero lag means you're caught up to the present
+        moment; growing lag means you're falling further behind it.
+      </p>
+      <table>
+        <thead><tr><th>Question</th><th>Answer</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Is some lag normal?</td>
+            <td>Yes — brief lag after a burst of traffic, or right after a job restarts and has a backlog to replay, is expected and should shrink back down on its own as the job catches up.</td>
+          </tr>
+          <tr>
+            <td>When is it a problem?</td>
+            <td>When it keeps <em>climbing</em> instead of holding steady or shrinking — that means your job's throughput has fallen below the rate new messages arrive, so it will never catch up on its own, and every result gets staler the longer it goes on.</td>
+          </tr>
+          <tr>
+            <td>Where do you see it?</td>
+            <td>Flink exposes it directly as a source metric (records/time behind the latest offset); Kafka itself also tracks it per consumer group, visible via tools like Kafka's own consumer-group CLI or a lag-monitoring exporter feeding your dashboards.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout">
+        <strong>These two are usually connected.</strong> Say a
+        fraud-detection job (Module 05) posts an alert to a Slack webhook
+        for every flagged transaction. If Slack's API gets slow one day,
+        the sink operator can't keep up — it starts backpressuring the
+        operators before it, which backpressure those before them, all
+        the way to the Kafka source, which is now forced to consume more
+        slowly than messages are arriving. The Web UI would show the sink
+        as "busy," and your dashboards would show consumer lag climbing —
+        two symptoms of the exact same root cause. When you see rising
+        lag, the Web UI's backpressure view is usually where you find out
+        why.
+      </div>
+
+      <p>
         For long-term monitoring (not just "what's happening right now"),
-        Flink's metrics system exports to Prometheus, Datadog, Graphite,
-        and others. The handful of metrics worth alerting on: checkpoint
-        duration/failure rate (is the safety net still working?), consumer
-        lag (is the source falling behind?), and backpressure (is
-        something downstream stuck?).
+        Flink's metrics system exports both of these — plus checkpoint
+        duration and failure rate (is the safety net still working?) — to
+        Prometheus, Datadog, Graphite, and others, so you can alert on
+        them before a user notices anything's wrong.
       </p>
 
       <div id="quiz-root" data-module-id="deployment"></div>
@@ -313,6 +388,17 @@
           ],
           correct: 1,
           explain: "The Web UI, served by the Dispatcher, is the primary at-a-glance operational view of a cluster and its jobs.",
+        },
+        {
+          prompt: "A dashboard shows consumer lag steadily climbing. What's the most useful next step?",
+          options: [
+            "Ignore it — some lag is always expected",
+            "Restart the JobManager immediately",
+            "Check the Web UI's backpressure view to find which operator is the actual bottleneck",
+            "Increase the watermark's out-of-orderness bound",
+          ],
+          correct: 2,
+          explain: "Climbing consumer lag is usually a symptom; backpressure from a slow operator (an overloaded sink, skewed keys, expensive per-record work) is the typical root cause, and the Web UI shows you exactly which operator is busy.",
         },
       ],
     };
