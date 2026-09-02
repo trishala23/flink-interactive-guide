@@ -1,0 +1,478 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>09 · Connectors Lab — Flink Interactive Guide</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐿️</text></svg>" />
+  <link rel="stylesheet" href="../assets/css/style.css" />
+  <style>
+    .mode-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 18px 0; }
+    .mode-tab { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 999px; padding: 8px 16px; font-size: 0.85rem; color: var(--text-dim); cursor: pointer; font-family: inherit; }
+    .mode-tab.active { background: var(--accent-gradient); color: #06090f; font-weight: 600; border-color: transparent; }
+    .goal-list { margin: 10px 0 0; padding-left: 20px; }
+    .goal-list li { color: var(--text-dim); font-size: 0.9rem; margin-bottom: 4px; }
+
+    .lag-header { display: flex; align-items: baseline; gap: 10px; margin-bottom: 14px; }
+    .lag-header .lag-num { font-size: 2rem; font-weight: 800; font-family: var(--mono); color: var(--accent); }
+    .lag-header.zero .lag-num { color: var(--success); }
+    .lag-header .lag-label { color: var(--text-faint); font-size: 0.85rem; }
+
+    .idle-row td { color: var(--text-faint); font-style: italic; }
+    #connectors-event-log { max-height: 130px; overflow-y: auto; font-family: var(--mono); font-size: 0.78rem; color: var(--text-faint); margin-top: 12px; border-top: 1px solid var(--border); padding-top: 10px; }
+    #connectors-event-log div { margin-bottom: 3px; }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">🐿️</span>
+        Flink Interactive Guide
+      </a>
+      <nav class="nav-links">
+        <a href="../index.html">Home</a>
+        <a href="01-introduction.html">Modules</a>
+        <a href="../cheatsheet.html">Cheatsheet</a>
+        <a href="../CONTRIBUTING.md">Contributing</a>
+        <a href="https://github.com/trishala23/flink-interactive-guide" target="_blank" rel="noopener">GitHub ↗</a>
+        <span class="progress-pill" data-progress-pill></span>
+      </nav>
+      <button class="nav-toggle" aria-label="Toggle menu">☰</button>
+    </div>
+  </header>
+
+  <div class="container module-layout">
+    <aside class="module-sidebar">
+      <h4>Modules</h4>
+      <ol>
+        <li><a data-module-id="introduction" href="01-introduction.html"><span class="dot"></span>01. Introduction</a></li>
+        <li><a data-module-id="architecture" href="02-architecture.html"><span class="dot"></span>02. Architecture</a></li>
+        <li><a data-module-id="datastream-api" href="03-datastream-api.html"><span class="dot"></span>03. DataStream API</a></li>
+        <li><a data-module-id="windows-time" href="04-windows-time.html"><span class="dot"></span>04. Time &amp; Windows</a></li>
+        <li><a data-module-id="state-fault-tolerance" href="05-state-fault-tolerance.html"><span class="dot"></span>05. State &amp; Fault Tolerance</a></li>
+        <li><a data-module-id="table-sql" href="06-table-sql.html"><span class="dot"></span>06. Table API &amp; SQL</a></li>
+        <li><a data-module-id="deployment" href="07-deployment.html"><span class="dot"></span>07. Deployment</a></li>
+        <li><a data-module-id="lab" href="08-lab.html"><span class="dot"></span>08. The Lab</a></li>
+        <li><a data-module-id="connectors" href="09-connectors.html"><span class="dot"></span>09. Connectors Lab</a></li>
+      </ol>
+    </aside>
+
+    <main class="module-main">
+      <div class="module-kicker">Module 09 · Capstone</div>
+      <h1>Connectors Lab — Kafka vs Kinesis</h1>
+      <p class="intro">
+        Module 03 mentioned that a real source is usually "a Kafka topic,
+        Kinesis stream, or similar" without saying much more. This lab
+        makes that concrete: configure a real source connector of either
+        kind, then watch Flink actually consume from it — partition by
+        partition, or shard by shard.
+      </p>
+
+      <div class="callout">
+        <strong>New to this? Start here.</strong> Think of Kafka and
+        Kinesis as two different shipping companies that can deliver
+        events to your Flink job's loading dock. Same kind of package
+        (events), different trucks and paperwork: Kafka splits a topic
+        into <strong>partitions</strong>, Kinesis splits a stream into
+        <strong>shards</strong> — but both exist for the same reason:
+        so many parallel subtasks (Module 02) can consume at once instead
+        of everything queuing behind one reader.
+      </div>
+
+      <h2>Same idea, different vocabulary</h2>
+      <table>
+        <thead><tr><th>Concept</th><th>Kafka</th><th>Kinesis</th></tr></thead>
+        <tbody>
+          <tr><td>The stream of events</td><td>Topic</td><td>Stream</td></tr>
+          <tr><td>A parallel slice of it</td><td>Partition</td><td>Shard</td></tr>
+          <tr><td>"How far have I read?"</td><td>Offset</td><td>Sequence number</td></tr>
+          <tr><td>Where to connect</td><td>Bootstrap servers</td><td>Region + stream ARN</td></tr>
+          <tr><td>Replay everything?</td><td><code>earliest</code></td><td><code>TRIM_HORIZON</code></td></tr>
+          <tr><td>Skip the backlog?</td><td><code>latest</code></td><td><code>LATEST</code></td></tr>
+        </tbody>
+      </table>
+      <p style="font-size: 0.88rem; color: var(--text-faint);">
+        The mapping isn't a coincidence — both are solving the same
+        problem (an ordered, replayable, partition-parallel log), just
+        with different names and different operational models (Kafka:
+        you usually run/manage the cluster; Kinesis: AWS manages it).
+      </p>
+
+      <h2>1. Choose a mission</h2>
+      <div class="mode-tabs" id="mode-tabs">
+        <button class="mode-tab active" data-mode="kafka-replay">Mission 1: Reprocess Everything (Kafka)</button>
+        <button class="mode-tab" data-mode="kinesis-live">Mission 2: Only Live Traffic (Kinesis)</button>
+        <button class="mode-tab" data-mode="sandbox">Sandbox (free build)</button>
+      </div>
+      <div class="widget" id="mission-panel"></div>
+
+      <h2>2. Configure your source</h2>
+      <div class="widget">
+        <div class="widget-label">Source configuration</div>
+        <div class="controls">
+          <label>Connector:
+            <select id="cfg-type">
+              <option value="kafka">Kafka</option>
+              <option value="kinesis">Kinesis</option>
+            </select>
+          </label>
+          <label id="cfg-name-label">Topic:
+            <input type="text" id="cfg-name" value="orders" style="width: 130px;" />
+          </label>
+          <label id="cfg-unit-label">Partitions:
+            <select id="cfg-units">
+              <option>2</option><option>3</option><option>4</option><option>5</option><option>6</option>
+            </select>
+          </label>
+          <label>Parallelism:
+            <select id="cfg-parallelism">
+              <option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option>
+            </select>
+          </label>
+          <label>Starting position:
+            <select id="cfg-position"></select>
+          </label>
+        </div>
+      </div>
+
+      <h2>Equivalent Flink code</h2>
+      <pre id="connector-code"><code>// configure a source above to see real code here</code></pre>
+
+      <h2>3. Run the consumer and watch</h2>
+      <div class="widget">
+        <div class="widget-label">Live consumption</div>
+        <div class="lag-header" id="lag-header">
+          <span class="lag-num" id="lag-num">—</span>
+          <span class="lag-label">total consumer lag (records not yet consumed)</span>
+        </div>
+        <div class="controls">
+          <button class="btn btn-primary btn-sm" id="conn-run">▶ Start run</button>
+          <button class="btn btn-secondary btn-sm" id="conn-next" disabled>Next tick →</button>
+          <button class="btn btn-secondary btn-sm" id="conn-play" disabled>▶ Auto-play</button>
+          <button class="btn btn-secondary btn-sm" id="conn-reset" disabled>↺ Reset</button>
+        </div>
+        <table id="partition-table"></table>
+        <p id="idle-warning" style="font-size:0.8rem; color: var(--warn); margin: 8px 0 0; display: none;"></p>
+        <div id="connectors-event-log"></div>
+      </div>
+
+      <div class="controls">
+        <button class="btn btn-secondary btn-sm" id="conn-check">Check mission</button>
+      </div>
+      <div class="result-box" id="conn-check-result" style="display:none;"></div>
+
+      <div id="quiz-root" data-module-id="connectors"></div>
+
+      <nav class="module-pager">
+        <a class="pager-link prev" href="08-lab.html">
+          <span class="dir">← Previous</span>
+          <span class="title">08. The Lab</span>
+        </a>
+        <a class="pager-link next" href="../cheatsheet.html">
+          <span class="dir">Next</span>
+          <span class="title">Cheatsheet →</span>
+        </a>
+      </nav>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>Flink Interactive Guide — <a href="../index.html">back to overview</a></p>
+    </div>
+  </footer>
+
+  <script src="../assets/js/app.js"></script>
+  <script src="../assets/js/connectors-lab.js"></script>
+  <script>
+    (function () {
+      let mode = "kafka-replay";
+      let sim = null;
+      let playTimer = null;
+      let tickCount = 0;
+
+      const missionPanel = document.getElementById("mission-panel");
+      const typeSel = document.getElementById("cfg-type");
+      const nameInput = document.getElementById("cfg-name");
+      const nameLabel = document.getElementById("cfg-name-label");
+      const unitsSel = document.getElementById("cfg-units");
+      const unitLabel = document.getElementById("cfg-unit-label");
+      const parallelismSel = document.getElementById("cfg-parallelism");
+      const positionSel = document.getElementById("cfg-position");
+      const codeEl = document.getElementById("connector-code");
+      const lagHeader = document.getElementById("lag-header");
+      const lagNum = document.getElementById("lag-num");
+      const runBtn = document.getElementById("conn-run");
+      const nextBtn = document.getElementById("conn-next");
+      const playBtn = document.getElementById("conn-play");
+      const resetBtn = document.getElementById("conn-reset");
+      const checkBtn = document.getElementById("conn-check");
+      const checkResult = document.getElementById("conn-check-result");
+      const partitionTable = document.getElementById("partition-table");
+      const idleWarning = document.getElementById("idle-warning");
+      const eventLog = document.getElementById("connectors-event-log");
+
+      function currentConfig() {
+        return {
+          type: typeSel.value,
+          name: nameInput.value.trim() || CONNECTOR_TYPES[typeSel.value].defaultName,
+          unitCount: Number(unitsSel.value),
+          parallelism: Number(parallelismSel.value),
+          startingPosition: positionSel.value,
+        };
+      }
+
+      function renderMissionPanel() {
+        missionPanel.innerHTML = "";
+        if (mode === "sandbox") {
+          const p = document.createElement("p");
+          p.style.margin = "0";
+          p.innerHTML =
+            "<strong>Sandbox mode.</strong> No mission to complete — configure anything. " +
+            "Try: Kafka with 5 partitions but parallelism 2, and watch two subtasks split the work unevenly. " +
+            "Or: Kinesis with 2 shards but parallelism 5, and watch 3 subtasks sit idle.";
+          missionPanel.appendChild(p);
+          return;
+        }
+        const m = CONNECTOR_MISSIONS[mode];
+        const title = document.createElement("h3");
+        title.style.marginTop = "0";
+        title.textContent = m.title;
+        const scenario = document.createElement("p");
+        scenario.textContent = m.scenario;
+        const goalList = document.createElement("ol");
+        goalList.className = "goal-list";
+        m.goal.forEach((g) => {
+          const li = document.createElement("li");
+          li.textContent = g;
+          goalList.appendChild(li);
+        });
+        missionPanel.appendChild(title);
+        missionPanel.appendChild(scenario);
+        missionPanel.appendChild(goalList);
+      }
+
+      document.getElementById("mode-tabs").addEventListener("click", (e) => {
+        const btn = e.target.closest(".mode-tab");
+        if (!btn) return;
+        document.querySelectorAll(".mode-tab").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        mode = btn.dataset.mode;
+        renderMissionPanel();
+        checkResult.style.display = "none";
+      });
+
+      function renderTypeDependentUI() {
+        const meta = CONNECTOR_TYPES[typeSel.value];
+        nameLabel.childNodes[0].textContent = meta.nameLabel + ": ";
+        unitLabel.childNodes[0].textContent = meta.unitLabelPlural.charAt(0).toUpperCase() + meta.unitLabelPlural.slice(1) + ": ";
+        if (!nameInput.dataset.userEdited) nameInput.value = meta.defaultName;
+        positionSel.innerHTML = "";
+        meta.startPositions.forEach((p) => positionSel.appendChild(new Option(p.label, p.value)));
+      }
+
+      nameInput.addEventListener("input", () => (nameInput.dataset.userEdited = "1"));
+
+      typeSel.addEventListener("change", () => {
+        nameInput.dataset.userEdited = "";
+        renderTypeDependentUI();
+        onConfigChange();
+      });
+      nameInput.addEventListener("input", onConfigChange);
+      [unitsSel, parallelismSel, positionSel].forEach((el) => el.addEventListener("change", onConfigChange));
+
+      function onConfigChange() {
+        renderCode();
+        resetRun();
+      }
+
+      function renderCode() {
+        codeEl.textContent = generateConnectorCode(currentConfig());
+      }
+
+      // ---------- Run / step ----------
+
+      function resetRun() {
+        sim = null;
+        tickCount = 0;
+        clearInterval(playTimer);
+        playTimer = null;
+        nextBtn.disabled = true;
+        playBtn.disabled = true;
+        resetBtn.disabled = true;
+        playBtn.textContent = "▶ Auto-play";
+        lagNum.textContent = "—";
+        lagHeader.classList.remove("zero");
+        partitionTable.innerHTML = "";
+        idleWarning.style.display = "none";
+        eventLog.innerHTML = "";
+      }
+
+      function renderPartitionTable() {
+        const meta = CONNECTOR_TYPES[sim.config.type];
+        const subtaskOf = {};
+        sim.subtasks.forEach((st) => st.assigned.forEach((p) => (subtaskOf[p] = st.index)));
+
+        const table = document.createElement("table");
+        const cap = meta.unitLabel.charAt(0).toUpperCase() + meta.unitLabel.slice(1);
+        table.innerHTML = `<thead><tr><th>${cap}</th><th>Assigned subtask</th><th>Backlog</th><th>Consumed</th><th>Lag</th></tr></thead>`;
+        const tbody = document.createElement("tbody");
+        sim.partitions.forEach((p) => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `<td>${meta.unitLabel} ${p.index}</td><td>${p.index in subtaskOf ? "subtask " + subtaskOf[p.index] : "—"}</td><td>${p.total}</td><td>${p.consumed}</td><td>${p.total - p.consumed}</td>`;
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        partitionTable.innerHTML = "";
+        partitionTable.appendChild(table);
+
+        const idle = sim.subtasks.filter((st) => st.assigned.length === 0);
+        if (idle.length) {
+          idleWarning.textContent = `⚠ ${idle.length} subtask(s) idle — no ${meta.unitLabelPlural} assigned: ${idle.map((s) => s.index).join(", ")}. Parallelism is higher than the ${meta.unitLabelPlural} count.`;
+          idleWarning.style.display = "block";
+        } else {
+          idleWarning.style.display = "none";
+        }
+      }
+
+      function updateLag() {
+        const lag = totalLag(sim);
+        lagNum.textContent = lag;
+        lagHeader.classList.toggle("zero", lag === 0);
+      }
+
+      function logLine(text) {
+        const div = document.createElement("div");
+        div.textContent = text;
+        eventLog.appendChild(div);
+        eventLog.scrollTop = eventLog.scrollHeight;
+      }
+
+      runBtn.addEventListener("click", () => {
+        sim = buildSimulation(currentConfig());
+        tickCount = 0;
+        nextBtn.disabled = isDone(sim);
+        playBtn.disabled = isDone(sim);
+        resetBtn.disabled = false;
+        renderPartitionTable();
+        updateLag();
+        eventLog.innerHTML = "";
+        logLine(sim.replay ? "Starting from the beginning — full backlog will be replayed." : "Starting from the live tail — existing backlog is skipped.");
+        if (isDone(sim)) logLine("Nothing to consume — already caught up.");
+      });
+
+      resetBtn.addEventListener("click", resetRun);
+
+      nextBtn.addEventListener("click", stepOnce);
+
+      playBtn.addEventListener("click", () => {
+        if (playTimer) {
+          clearInterval(playTimer);
+          playTimer = null;
+          playBtn.textContent = "▶ Auto-play";
+          return;
+        }
+        playBtn.textContent = "⏸ Pause";
+        playTimer = setInterval(() => {
+          if (!stepOnce()) {
+            clearInterval(playTimer);
+            playTimer = null;
+            playBtn.textContent = "▶ Auto-play";
+          }
+        }, 500);
+      });
+
+      function stepOnce() {
+        if (!sim || isDone(sim)) return false;
+        tickCount++;
+        const events = tick(sim);
+        events.forEach((e) => {
+          logLine(`tick ${tickCount}: subtask ${e.subtaskIndex} consumed ${CONNECTOR_TYPES[sim.config.type].unitLabel} ${e.partitionIndex} @ offset ${e.offset}`);
+        });
+        renderPartitionTable();
+        updateLag();
+        if (isDone(sim)) {
+          nextBtn.disabled = true;
+          logLine("✓ Caught up — consumer lag is zero.");
+          return false;
+        }
+        return true;
+      }
+
+      // ---------- Mission check ----------
+
+      checkBtn.addEventListener("click", () => {
+        if (mode === "sandbox") {
+          checkResult.textContent = "Sandbox mode has no mission to check — just experiment freely.";
+          checkResult.className = "result-box";
+          checkResult.style.display = "block";
+          return;
+        }
+        const result = CONNECTOR_MISSIONS[mode].validate(currentConfig());
+        checkResult.textContent = result.message;
+        checkResult.className = "result-box " + (result.ok ? "ok" : "err");
+        checkResult.style.display = "block";
+        if (result.ok) setModuleComplete("connectors");
+      });
+
+      // ---------- Init ----------
+
+      renderMissionPanel();
+      renderTypeDependentUI();
+      renderCode();
+    })();
+
+    window.QUIZ_DATA = {
+      title: "Check your understanding",
+      questions: [
+        {
+          prompt: "What do a Kafka partition and a Kinesis shard have in common?",
+          options: [
+            "Nothing — they solve unrelated problems",
+            "Both are a parallel, ordered slice of a topic/stream that a single subtask can consume independently",
+            "Both require the same client library",
+            "Both are only used for batch jobs",
+          ],
+          correct: 1,
+          explain: "Different names for the same idea: a way to split a stream into ordered, independently-consumable pieces so multiple parallel subtasks (Module 02) can read at once.",
+        },
+        {
+          prompt: "If a topic has 3 partitions and your source runs with parallelism 5, what happens?",
+          options: [
+            "Flink automatically lowers parallelism to 3",
+            "The job fails to start",
+            "2 subtasks are assigned no partitions and sit idle",
+            "Each partition gets read by all 5 subtasks simultaneously",
+          ],
+          correct: 2,
+          explain: "Partitions (or shards) are the hard ceiling on source parallelism — extra subtasks beyond that simply have nothing assigned to them.",
+        },
+        {
+          prompt: "Starting from earliest/TRIM_HORIZON vs. latest/LATEST changes what, exactly?",
+          options: [
+            "How fast events are consumed",
+            "Whether the existing backlog is replayed from the start, or skipped so only new records are seen",
+            "Which partitions get assigned to which subtasks",
+            "Whether checkpoints are enabled",
+          ],
+          correct: 1,
+          explain: "It's purely about where reading begins: from the oldest retained record (full replay) or from the current end (only what arrives from now on).",
+        },
+        {
+          prompt: "Why would consumer lag (Module 07) start high and then shrink to zero right after a job starts with an earliest/TRIM_HORIZON position?",
+          options: [
+            "It wouldn't — lag is unrelated to starting position",
+            "Because the job is replaying the whole existing backlog before it's caught up to \"now\"",
+            "Because checkpoints are failing",
+            "Because the watermark is misconfigured",
+          ],
+          correct: 1,
+          explain: "Replaying history means there's a real backlog to work through first — lag naturally starts high and drains as the job catches up, exactly like this lab's simulation.",
+        },
+      ],
+    };
+  </script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>
