@@ -162,6 +162,85 @@
       </div>
       <div class="result-box" id="conn-check-result" style="display:none;"></div>
 
+      <h2>4. Beyond the lab: a real-world pattern</h2>
+      <p>
+        Everything above is one job reading from one source. Real
+        deployments often add two more layers on top: splitting output
+        across sinks by priority, and sizing parallelism differently per
+        environment instead of hardcoding one number.
+      </p>
+
+      <h3>Fan-out by priority: not every event deserves equal treatment</h3>
+      <p>
+        Picture an order-processing job where a small fraction of orders
+        need a fraud-review decision within seconds, while the rest can
+        be processed at normal speed. Writing everything to one output
+        stream forces every downstream consumer to be sized for the
+        worst case. A common alternative: split the job's output across
+        two Kinesis streams by priority — call them <code>p0</code>
+        (urgent, tightly-SLA'd) and <code>p1</code> (routine) — so each
+        downstream consumer can be sized, scaled, and alerted on
+        independently.
+      </p>
+      <p>
+        Flink's <strong>side outputs</strong> are built for exactly this:
+        a way for one operator to emit to more than one named output.
+      </p>
+      <pre><code>OutputTag&lt;Order&gt; p1Tag = new OutputTag&lt;Order&gt;("p1") {};
+
+SingleOutputStreamOperator&lt;Order&gt; tagged = orders.process(
+    new ProcessFunction&lt;Order, Order&gt;() {
+        public void processElement(Order order, Context ctx, Collector&lt;Order&gt; out) {
+            if (order.isHighPriority()) {
+                out.collect(order);          // main output -> the p0 stream
+            } else {
+                ctx.output(p1Tag, order);    // side output -> the p1 stream
+            }
+        }
+    });
+
+tagged.sinkTo(p0KinesisSink);
+tagged.getSideOutput(p1Tag).sinkTo(p1KinesisSink);</code></pre>
+      <p>
+        One job, one set of business logic, but two independently-scaled
+        Kinesis streams downstream — each with its own shard count, its
+        own consumer parallelism, and its own alerting thresholds for
+        consumer lag (Module 07).
+      </p>
+
+      <h3>Parallelism as a per-environment config, not a constant</h3>
+      <p>
+        The mission above asked for a specific parallelism because it
+        had to match a specific partition/shard count — but that
+        partition count itself is rarely the same everywhere. A
+        low-traffic test environment doesn't need 8 shards, and a
+        high-traffic production region needs more capacity than a
+        quieter one. A config shape like this is typical:
+      </p>
+      <table>
+        <thead><tr><th>Environment</th><th>Typical parallelism</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr><td>Nonprod / dev (any region)</td><td>1</td><td>Minimal test traffic — fast iteration matters more than throughput.</td></tr>
+          <tr><td>Prod, quieter region</td><td>4</td><td>Real user traffic, but well under the busiest region's peak.</td></tr>
+          <tr><td>Prod, busiest region</td><td>8</td><td>Sized for that region's actual peak load.</td></tr>
+        </tbody>
+      </table>
+      <p>
+        The parallelism (and often the source's own partition/shard
+        count) is usually externalized as a per-environment config value
+        rather than hardcoded, so the same build artifact runs
+        differently sized in each place without a code change:
+      </p>
+      <pre><code>int parallelism = params.getInt("source.parallelism", 1); // safe default for nonprod
+env.setParallelism(parallelism);</code></pre>
+      <div class="callout">
+        This is the same idea as this lab's mission validation, just
+        applied per environment instead of once: parallelism is set to
+        <em>match</em> the partition/shard count for that environment's
+        source, and that match is re-decided every time the environment
+        (or its traffic) changes — never assumed to be a fixed number.
+      </div>
+
       <div id="quiz-root" data-module-id="connectors"></div>
 
       <nav class="module-pager">
@@ -469,6 +548,28 @@
           ],
           correct: 1,
           explain: "Replaying history means there's a real backlog to work through first — lag naturally starts high and drains as the job catches up, exactly like this lab's simulation.",
+        },
+        {
+          prompt: "What is a Flink side output typically used for?",
+          options: [
+            "Speeding up checkpoints",
+            "Letting one operator emit to more than one named output, e.g. splitting a stream by priority into separate sinks",
+            "Reading from more than one source at once",
+            "Debugging — it's removed before production",
+          ],
+          correct: 1,
+          explain: "A side output lets a process function route some records to the main output and others to a separately-tagged output — the mechanism behind patterns like priority-based sink fan-out.",
+        },
+        {
+          prompt: "Why would the same Flink job run with parallelism 1 in a test environment but parallelism 8 in a busy production region?",
+          options: [
+            "Parallelism is fixed at build time and can't differ by environment",
+            "Test environments have far less traffic, so lower parallelism is enough — production is sized for real, region-specific load",
+            "Production always needs the maximum parallelism Flink supports",
+            "It's arbitrary and has no relationship to traffic",
+          ],
+          correct: 1,
+          explain: "Parallelism (and often the source's own partition/shard count) is usually an externalized per-environment config, sized to that environment's actual expected load rather than one constant everywhere.",
         },
       ],
     };
