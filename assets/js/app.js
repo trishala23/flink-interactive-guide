@@ -12,6 +12,7 @@ const MODULES = [
   { id: "deployment", title: "Deployment & Operations", file: "07-deployment.html" },
   { id: "lab", title: "The Lab", file: "08-lab.html" },
   { id: "connectors", title: "Connectors Lab", file: "09-connectors.html" },
+  { id: "production", title: "Production Architecture Lab", file: "10-production-architecture.html" },
 ];
 
 function getProgress() {
