@@ -9,7 +9,7 @@ JavaScript, no backend, no bundler, deployed straight to GitHub Pages.
 
 ## What's in the guide
 
-Ten modules, each pairing a short plain-English explanation with a
+Eleven modules, each pairing a short plain-English explanation with a
 genuine interactive widget and a knowledge-check quiz:
 
 | # | Module | Interactive piece |
@@ -24,6 +24,7 @@ genuine interactive widget and a knowledge-check quiz:
 | 08 | The Lab (capstone) | Build a real pipeline from filter/keyBy/window operators; a small engine actually runs your sample stream through it, event by event, live |
 | 09 | Connectors Lab | Configure a Kafka or Kinesis source and watch partitions/shards actually drain, with live consumer lag |
 | 10 | Production Architecture Lab | Clickable diagram of a real production stack (Kafka/Kinesis, DynamoDB, Firehose DLQ, Datadog, StatsD) plus a record-trace simulator showing the success and DLQ paths live |
+| 11 | Patterns from a Real Job | Clickable job graph of a real multi-source enrichment job, a state-TTL debounce router simulator (OnCreateAndWrite vs OnReadAndWrite), and an async I/O timeline (ordered vs unordered, capacity, timeouts) |
 
 Plus a [cheatsheet](cheatsheet.html) for quick reference once you've been
 through the modules.
@@ -94,7 +95,7 @@ index.html                    Landing page: hero, module grid, progress overview
 cheatsheet.html                Quick-reference tables (DataStream API, CLI, SQL, concepts)
 modules/
   01-introduction.html         ... through ...
-  10-production-architecture.html  Ten module pages, each theory + widget(s) + quiz
+  11-production-patterns.html  Eleven module pages, each theory + widget(s) + quiz
 assets/
   css/style.css                Shared dark-theme design system
   js/app.js                    Nav, progress tracking (localStorage), code tabs

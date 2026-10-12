@@ -1,0 +1,903 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>11 · Patterns from a Real Job — Flink Interactive Guide</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐿️</text></svg>" />
+  <link rel="stylesheet" href="../assets/css/style.css" />
+  <style>
+    .diagram-wrap { overflow-x: auto; }
+    .diagram-wrap svg { display: block; width: 100%; height: auto; min-width: 640px; }
+    .diagram-node rect { fill: var(--bg-elevated-2); stroke: var(--border); stroke-width: 1.5; transition: stroke 0.15s, fill 0.15s; }
+    .diagram-node text { fill: var(--text); font-family: var(--sans); }
+    .diagram-node .role { fill: var(--text-faint); font-size: 9.5px; font-family: var(--mono); }
+    .diagram-node { cursor: pointer; }
+    .diagram-node:hover rect, .diagram-node:focus rect { stroke: var(--accent); }
+    .diagram-node.selected rect { stroke: var(--accent); stroke-width: 2.5; fill: var(--bg-elevated); }
+    .diagram-arrow { stroke: var(--text-faint); stroke-width: 1.5; fill: none; }
+    .diagram-arrow.side { stroke-dasharray: 5 3; }
+    .diagram-label { fill: var(--text-faint); font-size: 9.5px; font-family: var(--mono); }
+
+    .lane-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 14px 0; }
+    .lane { background: var(--bg-elevated-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px; text-align: center; }
+    .lane h4 { margin: 0 0 6px; font-size: 0.72rem; color: var(--text-faint); font-weight: 600; font-family: var(--mono); }
+    .lane .n { font-size: 1.5rem; font-weight: 800; font-family: var(--mono); color: var(--text); }
+    .lane.flash { border-color: var(--accent); }
+    .state-table { width: 100%; font-family: var(--mono); font-size: 0.8rem; }
+    .state-table td, .state-table th { padding: 4px 8px; }
+    .log-box { max-height: 150px; overflow-y: auto; font-family: var(--mono); font-size: 0.78rem; color: var(--text-dim); margin-top: 12px; border-top: 1px solid var(--border); padding-top: 10px; }
+    .log-box div { margin-bottom: 3px; }
+    .log-box .ok { color: var(--success); }
+    .log-box .warn { color: var(--warn); }
+    .log-box .fail { color: var(--danger); }
+    .log-box .info { color: var(--accent); }
+
+    .tl-wrap { overflow-x: auto; }
+    .tl { min-width: 520px; font-family: var(--mono); font-size: 0.75rem; }
+    .tl-row { display: grid; grid-template-columns: 54px 1fr 70px; align-items: center; gap: 8px; height: 26px; }
+    .tl-track { position: relative; height: 16px; background: var(--bg-elevated-2); border-radius: 4px; }
+    .tl-bar { position: absolute; top: 0; height: 16px; border-radius: 4px; background: var(--accent); opacity: 0.85; }
+    .tl-bar.wait { background: var(--text-faint); opacity: 0.35; }
+    .tl-bar.hold { background: var(--warn); opacity: 0.6; }
+    .tl-bar.timeout { background: var(--danger); }
+    .tl-bar.lost { background: var(--danger); opacity: 0.25; }
+    .tl-emit { position: absolute; top: -3px; width: 3px; height: 22px; background: var(--success); border-radius: 2px; }
+    .tl-axis { display: grid; grid-template-columns: 54px 1fr 70px; gap: 8px; color: var(--text-faint); margin-top: 4px; }
+    .tl-axis .ticks { display: flex; justify-content: space-between; }
+    .tl-legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 0.75rem; color: var(--text-faint); margin-top: 10px; }
+    .tl-legend span::before { content: ""; display: inline-block; width: 12px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; background: var(--c); opacity: var(--o, 1); }
+
+    @media (max-width: 640px) { .lane-grid { grid-template-columns: repeat(2, 1fr); } }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">🐿️</span>
+        Flink Interactive Guide
+      </a>
+      <nav class="nav-links">
+        <a href="../index.html">Home</a>
+        <a href="01-introduction.html">Modules</a>
+        <a href="../cheatsheet.html">Cheatsheet</a>
+        <a href="../CONTRIBUTING.md">Contributing</a>
+        <a href="https://github.com/trishala23/flink-interactive-guide" target="_blank" rel="noopener">GitHub ↗</a>
+        <span class="progress-pill" data-progress-pill></span>
+      </nav>
+      <button class="nav-toggle" aria-label="Toggle menu">☰</button>
+    </div>
+  </header>
+
+  <div class="container module-layout">
+    <aside class="module-sidebar">
+      <h4>Modules</h4>
+      <ol>
+        <li><a data-module-id="introduction" href="01-introduction.html"><span class="dot"></span>01. Introduction</a></li>
+        <li><a data-module-id="architecture" href="02-architecture.html"><span class="dot"></span>02. Architecture</a></li>
+        <li><a data-module-id="datastream-api" href="03-datastream-api.html"><span class="dot"></span>03. DataStream API</a></li>
+        <li><a data-module-id="windows-time" href="04-windows-time.html"><span class="dot"></span>04. Time &amp; Windows</a></li>
+        <li><a data-module-id="state-fault-tolerance" href="05-state-fault-tolerance.html"><span class="dot"></span>05. State &amp; Fault Tolerance</a></li>
+        <li><a data-module-id="table-sql" href="06-table-sql.html"><span class="dot"></span>06. Table API &amp; SQL</a></li>
+        <li><a data-module-id="deployment" href="07-deployment.html"><span class="dot"></span>07. Deployment</a></li>
+        <li><a data-module-id="lab" href="08-lab.html"><span class="dot"></span>08. The Lab</a></li>
+        <li><a data-module-id="connectors" href="09-connectors.html"><span class="dot"></span>09. Connectors Lab</a></li>
+        <li><a data-module-id="production" href="10-production-architecture.html"><span class="dot"></span>10. Production Architecture</a></li>
+        <li><a data-module-id="patterns" href="11-production-patterns.html"><span class="dot"></span>11. Patterns from a Real Job</a></li>
+      </ol>
+    </aside>
+
+    <main class="module-main">
+      <div class="module-kicker">Module 11 · Deep dive</div>
+      <h1>Patterns from a Real Job</h1>
+      <p class="intro">
+        Module 10 showed the infrastructure around a production job. This
+        module looks inside one: a long-running enrichment job that merges
+        about ten Kafka and Kinesis sources, keeps per-device records up to
+        date, and calls external HTTP APIs when data needs refreshing. It
+        has no windows and no watermarks, but it uses almost every other
+        part of the DataStream API. Each section below covers one Flink
+        concept the job depends on, and the reason it was chosen.
+      </p>
+
+      <div class="callout">
+        <strong>How to read this module.</strong> Names, topics and
+        payloads are generic. The job itself is real, and the code
+        snippets are simplified versions of how it is built. Each
+        section ends with the mistake that concept protects against,
+        because most of these patterns were introduced after that
+        mistake had already happened in production.
+      </div>
+
+      <h2>The job graph</h2>
+      <p><strong>Click any operator</strong> to see which Flink concept it relies on.</p>
+
+      <div class="widget">
+        <div class="widget-label">Job graph (simplified)</div>
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 730 390" role="img" aria-label="Job graph: sources feed a router, which splits into global, static and refresh paths; results go to priority sinks and a dead-letter queue">
+            <defs>
+              <marker id="arrow11" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0,0 L10,5 L0,10 z" fill="var(--text-faint)" />
+              </marker>
+            </defs>
+
+            <path class="diagram-arrow" marker-end="url(#arrow11)" d="M150,70 L200,108" />
+            <path class="diagram-arrow" marker-end="url(#arrow11)" d="M150,195 L200,130" />
+            <path class="diagram-arrow" marker-end="url(#arrow11)" d="M150,52 L408,48" />
+            <text class="diagram-label" x="200" y="42">some topics skip the router</text>
+
+            <path class="diagram-arrow" marker-end="url(#arrow11)" d="M350,108 L408,70" />
+            <text class="diagram-label" x="356" y="84">main</text>
+            <path class="diagram-arrow side" marker-end="url(#arrow11)" d="M350,130 L408,214" />
+            <text class="diagram-label" x="368" y="160">side: static</text>
+            <path class="diagram-arrow side" marker-end="url(#arrow11)" d="M275,146 L275,213" />
+            <text class="diagram-label" x="282" y="185">side: refresh</text>
+
+            <path class="diagram-arrow" marker-end="url(#arrow11)" d="M275,261 L275,298" />
+            <path class="diagram-arrow" marker-end="url(#arrow11)" d="M350,318 L408,242" />
+            <text class="diagram-label" x="356" y="300">results</text>
+
+            <path class="diagram-arrow side" marker-end="url(#arrow11)" d="M570,218 L608,186" />
+            <path class="diagram-arrow side" marker-end="url(#arrow11)" d="M570,226 L608,226" />
+            <path class="diagram-arrow side" marker-end="url(#arrow11)" d="M570,234 L608,266" />
+
+            <path class="diagram-arrow side" marker-end="url(#arrow11)" d="M520,252 L600,318" />
+            <path class="diagram-arrow side" marker-end="url(#arrow11)" d="M570,44 L718,44 L718,342 L712,342" />
+            <text class="diagram-label" x="600" y="38">side: DLQ</text>
+
+            <g class="diagram-node" data-node="sources" tabindex="0" role="button">
+              <rect x="10" y="38" width="140" height="50" rx="8" />
+              <text x="80" y="59" text-anchor="middle" font-weight="700" font-size="12">Kafka × 8</text>
+              <text class="role" x="80" y="75" text-anchor="middle">KafkaSource</text>
+            </g>
+            <g class="diagram-node" data-node="sources" tabindex="0" role="button">
+              <rect x="10" y="170" width="140" height="50" rx="8" />
+              <text x="80" y="191" text-anchor="middle" font-weight="700" font-size="12">Kinesis × 2</text>
+              <text class="role" x="80" y="207" text-anchor="middle">KinesisStreamsSource</text>
+            </g>
+
+            <g class="diagram-node" data-node="router" tabindex="0" role="button">
+              <rect x="200" y="90" width="150" height="56" rx="8" />
+              <text x="275" y="112" text-anchor="middle" font-weight="700" font-size="12">Router</text>
+              <text class="role" x="275" y="128" text-anchor="middle">union → keyBy(fallback)</text>
+              <text class="role" x="275" y="140" text-anchor="middle">+ TTL debounce</text>
+            </g>
+            <g class="diagram-node" data-node="token" tabindex="0" role="button">
+              <rect x="200" y="215" width="150" height="46" rx="8" />
+              <text x="275" y="235" text-anchor="middle" font-weight="700" font-size="12">Token cache</text>
+              <text class="role" x="275" y="251" text-anchor="middle">keyBy(type) · TTL</text>
+            </g>
+            <g class="diagram-node" data-node="async" tabindex="0" role="button">
+              <rect x="200" y="300" width="150" height="46" rx="8" />
+              <text x="275" y="320" text-anchor="middle" font-weight="700" font-size="12">Async HTTP</text>
+              <text class="role" x="275" y="336" text-anchor="middle">unorderedWait</text>
+            </g>
+
+            <g class="diagram-node" data-node="global" tabindex="0" role="button">
+              <rect x="410" y="22" width="160" height="52" rx="8" />
+              <text x="490" y="44" text-anchor="middle" font-weight="700" font-size="12">Global processor</text>
+              <text class="role" x="490" y="61" text-anchor="middle">keyBy(jobId)</text>
+            </g>
+            <g class="diagram-node" data-node="static" tabindex="0" role="button">
+              <rect x="410" y="200" width="160" height="52" rx="8" />
+              <text x="490" y="222" text-anchor="middle" font-weight="700" font-size="12">Static processor</text>
+              <text class="role" x="490" y="239" text-anchor="middle">keyBy(deviceId)</text>
+            </g>
+
+            <g class="diagram-node" data-node="sinks" tabindex="0" role="button">
+              <rect x="610" y="170" width="95" height="30" rx="6" />
+              <text x="657" y="189" text-anchor="middle" font-weight="700" font-size="11">P0 sink</text>
+            </g>
+            <g class="diagram-node" data-node="sinks" tabindex="0" role="button">
+              <rect x="610" y="210" width="95" height="30" rx="6" />
+              <text x="657" y="229" text-anchor="middle" font-weight="700" font-size="11">P1 sink</text>
+            </g>
+            <g class="diagram-node" data-node="sinks" tabindex="0" role="button">
+              <rect x="610" y="250" width="95" height="30" rx="6" />
+              <text x="657" y="269" text-anchor="middle" font-weight="700" font-size="11">P2 sink</text>
+            </g>
+            <g class="diagram-node" data-node="dlq" tabindex="0" role="button">
+              <rect x="600" y="318" width="110" height="48" rx="8" />
+              <text x="655" y="338" text-anchor="middle" font-weight="700" font-size="11.5">DLQ</text>
+              <text class="role" x="655" y="354" text-anchor="middle">union → rebalance</text>
+            </g>
+          </svg>
+        </div>
+        <div class="result-box" id="graph-info" aria-live="polite"></div>
+      </div>
+
+      <!-- ============================================================ -->
+      <h2 id="c-union">1 · <code>union()</code>: many sources, one operator</h2>
+      <p>
+        Every source deserializes into the same envelope type: a trace
+        context plus a Protobuf message with an <code>eventType</code>
+        field. Because the types match, the job can <code>union()</code>
+        eight streams into one and send them to a single keyed operator.
+        That operator then holds one consistent view of each device.
+        Without the union, the same device's state would be split across
+        eight operators.
+      </p>
+      <pre><code>var combined = statusStream;
+if (profileStream != null)  combined = combined.union(profileStream);   // feature-flagged
+if (contextStream != null)  combined = combined.union(contextStream);   // feature-flagged
+if (refreshResults != null) combined = combined.union(refreshResults);  // loops back from async I/O
+
+combined.keyBy(e -&gt; e.f1.getDeviceId())
+        .process(new StaticDataProcessor(...))
+        .uid("staticDataProcessor");</code></pre>
+      <ul>
+        <li>
+          <strong><code>union</code> vs. <code>connect</code>:</strong>
+          <code>union</code> needs identical types and gives you one
+          stream. <code>connect</code> keeps two different types apart and
+          gives you a <code>CoProcessFunction</code> with
+          <code>processElement1/2</code>. Having one shared envelope type is
+          what makes the simpler <code>union</code> possible.
+        </li>
+        <li>
+          <strong>Feature flags change the graph.</strong> When a source is
+          disabled, its stream is <code>null</code> and it is never added to
+          the graph at all. That is a change to the topology, not just a
+          config change. Restoring from a savepoint still works because
+          every operator has a stable <code>uid()</code>. If you remove
+          a stateful operator, you need <code>--allowNonRestoredState</code>.
+        </li>
+      </ul>
+      <div class="callout">
+        <strong>Mistake it prevents:</strong> two operators each keeping
+        half of a device's record and overwriting each other's writes in
+        the database.
+      </div>
+
+      <!-- ============================================================ -->
+      <h2 id="c-keyby">2 · <code>keyBy</code> decides where state lives</h2>
+      <p>
+        The job keys the same data three different ways, and each key
+        has a different purpose:
+      </p>
+      <table>
+        <thead><tr><th>Operator</th><th>Key</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr><td>Static processor</td><td><code>deviceId</code></td><td>All updates for one device go to one subtask, in order. Per-device state is consistent.</td></tr>
+          <tr><td>Global processor</td><td><code>jobId</code></td><td>Records that apply to many devices are grouped by the job they belong to.</td></tr>
+          <tr><td>Router</td><td>partition → device → job → request ID (first one present)</td><td>Mixed input: use whichever identifier the event actually has.</td></tr>
+          <tr><td>Token cache</td><td><code>eventType</code></td><td>Only about 7 distinct keys, so one cached token per downstream API.</td></tr>
+        </tbody>
+      </table>
+      <p>
+        The token cache shows an important rule: <strong>the number of
+        distinct keys limits your useful parallelism.</strong> With 7
+        keys, at most 7 subtasks will ever do any work. The job sets
+        this operator's parallelism to 1 for that reason.
+      </p>
+      <p>
+        The router's fallback key is valid, but it is deterministic
+        only per event shape. An event keyed by Kafka partition
+        <code>"3"</code> and another keyed by device <code>"3"</code>
+        would land in the same key group and share state. Keep the key
+        spaces separate, for example by prefixing <code>"p:3"</code> and
+        <code>"d:3"</code>, when one operator can receive several kinds
+        of key.
+      </p>
+      <div class="callout">
+        <strong>Mistake it prevents:</strong> keying on something
+        non-deterministic, such as a random value or a timestamp. Flink
+        must compute the same key for a record every time; otherwise
+        state ends up on the wrong subtask after a restore.
+      </div>
+
+      <!-- ============================================================ -->
+      <h2 id="c-side">3 · Side outputs as a router</h2>
+      <p>
+        One <code>KeyedProcessFunction</code> looks at the
+        <code>eventSubtype</code> and sends each event to one of several
+        outputs. The event can go to the main output, the
+        <em>static</em> side output, the <em>refresh</em> side output,
+        or, if it throws, the <em>DLQ</em> side output. Downstream, the
+        static processor sends results onward through one of three
+        priority side outputs (P0/P1/P2), and each of those has its own
+        Kinesis sink.
+      </p>
+      <pre><code>public static final OutputTag&lt;Envelope&gt; STATIC  = new OutputTag&lt;&gt;("staticDataStream")  {};
+public static final OutputTag&lt;Envelope&gt; REFRESH = new OutputTag&lt;&gt;("refreshDataStream") {};
+public static final OutputTag&lt;Envelope&gt; DLQ     = new OutputTag&lt;&gt;("dlqStream")         {};
+
+switch (event.getEventSubtype()) {
+  case MAPPING_UPDATE        -&gt; out.collect(event);              // main output
+  case STATIC_DATA_UPDATE    -&gt; ctx.output(STATIC, event);
+  case PROFILE_REFRESH       -&gt; { if (debounce.allow()) ctx.output(REFRESH, event); }
+}
+
+// in the job:
+var routed  = combined.keyBy(...).process(new Router());
+var refresh = routed.getSideOutput(REFRESH);
+var statics = routed.getSideOutput(STATIC);</code></pre>
+      <ul>
+        <li>
+          <strong>Why <code>{}</code> after <code>new OutputTag</code>?</strong>
+          The empty braces create an anonymous subclass. Java erases
+          generic types at runtime, and the subclass is how Flink still
+          finds the element type <code>Envelope</code>. If you leave
+          them out, you get an <code>InvalidTypesException</code>.
+        </li>
+        <li>
+          <strong>Why not <code>filter()</code> three times?</strong> Each
+          <code>filter</code> evaluates every record again and needs its
+          own state access. A side-output router reads state once and
+          makes one routing decision for each event.
+        </li>
+        <li>
+          <strong>Priority lanes:</strong> separate sinks for P0/P1/P2
+          mean a backlog of low-priority traffic does not delay
+          high-priority records on the same Kinesis stream. Each lane
+          has its own buffer and its own in-flight request limit.
+        </li>
+      </ul>
+      <div class="callout">
+        <strong>Watch out:</strong> a side output that nothing reads with
+        <code>getSideOutput()</code> is discarded without any warning.
+        If an operator writes failures to <code>DLQ</code> but the job
+        graph never calls <code>getSideOutput(DLQ)</code> on that
+        operator, those records are lost. Check that every
+        <code>ctx.output(tag, …)</code> has a matching
+        <code>getSideOutput(tag)</code>.
+      </div>
+
+      <!-- ============================================================ -->
+      <h2 id="c-ttl">4 · State TTL as a debounce</h2>
+      <p>
+        Refresh requests can arrive in bursts, for example 40 requests for
+        the same device in a few seconds. Each one would trigger an HTTP
+        call to an external API. The router stops this with a
+        <code>ValueState&lt;Boolean&gt;</code> flag per (device, API) that
+        has a <strong>TTL</strong>. If the flag is empty, the refresh goes
+        through and the flag is set. If the flag is set, the refresh is
+        dropped and a counter goes up. When the TTL expires, the flag
+        disappears and the next refresh is allowed again. The
+        same mechanism caches OAuth tokens: the TTL is set to the
+        token's lifetime, so an expired token is never returned.
+      </p>
+      <pre><code>var ttl = StateTtlConfig.newBuilder(Duration.ofSeconds(debounceSeconds))
+    .setUpdateType(StateTtlConfig.UpdateType.OnCreateAndWrite)
+    .setStateVisibility(StateTtlConfig.StateVisibility.NeverReturnExpired)
+    .build();
+var desc = new ValueStateDescriptor&lt;&gt;("profileRefreshLimiter", Types.BOOLEAN);
+desc.enableTimeToLive(ttl);
+
+boolean allow() throws IOException {
+  if (!Boolean.TRUE.equals(limiter.value())) { limiter.update(true); return true; }
+  return false;
+}</code></pre>
+      <ul>
+        <li><strong>No timers needed.</strong> You could build this with
+          <code>registerProcessingTimeTimer</code> + <code>onTimer</code> +
+          <code>clear()</code>. TTL does the same thing in a few lines and
+          also cleans up state for devices that never send another
+          event.</li>
+        <li><strong><code>OnCreateAndWrite</code> vs. <code>OnReadAndWrite</code></strong>
+          is the setting that matters most here. If reads also reset the TTL, every dropped request
+          (a read) extends the window. A device that sends a request
+          more often than the TTL would then never be refreshed again.
+          Try it in the simulator below.</li>
+        <li><strong>TTL uses processing time</strong> (wall-clock time),
+          not event time. That is what you want for rate limiting.</li>
+      </ul>
+
+      <h3>Try it: debounce router</h3>
+      <p>
+        Send events for a device and move the clock forward. Profile
+        updates go to the <em>static</em> lane, refresh requests are
+        debounced, and malformed events go to the DLQ. Then change the
+        update type to <code>OnReadAndWrite</code> and send a refresh
+        every 10&nbsp;s. The refresh will never get through.
+      </p>
+
+      <div class="widget">
+        <div class="widget-label">KeyedProcessFunction + ValueState TTL</div>
+        <div class="controls">
+          <label>Device
+            <select id="db-key">
+              <option>dev-1</option><option>dev-2</option><option>dev-3</option>
+            </select>
+          </label>
+          <label>TTL
+            <select id="db-ttl">
+              <option value="20">20 s</option>
+              <option value="30" selected>30 s</option>
+              <option value="60">60 s</option>
+            </select>
+          </label>
+          <div class="pill-toggle" id="db-mode" role="group" aria-label="TTL update type">
+            <button class="active" data-mode="write">OnCreateAndWrite</button>
+            <button data-mode="read">OnReadAndWrite</button>
+          </div>
+        </div>
+        <div class="controls">
+          <button class="btn btn-secondary btn-sm" data-send="update">+ Profile update</button>
+          <button class="btn btn-primary btn-sm" data-send="refresh">+ Refresh request</button>
+          <button class="btn btn-secondary btn-sm" data-send="bad">+ Malformed event</button>
+          <button class="btn btn-secondary btn-sm" id="db-tick">⏱ Clock +10 s</button>
+          <button class="btn btn-secondary btn-sm" id="db-reset">↺ Reset</button>
+          <span style="font-family: var(--mono); font-size: 0.85rem; color: var(--text-dim);">t = <span id="db-clock">0</span> s</span>
+        </div>
+        <div class="lane-grid">
+          <div class="lane" data-lane="static"><h4>side: static</h4><div class="n">0</div></div>
+          <div class="lane" data-lane="refresh"><h4>side: refresh → HTTP</h4><div class="n">0</div></div>
+          <div class="lane" data-lane="dropped"><h4>debounced (counter)</h4><div class="n">0</div></div>
+          <div class="lane" data-lane="dlq"><h4>side: DLQ</h4><div class="n">0</div></div>
+        </div>
+        <table class="state-table">
+          <thead><tr><th>key</th><th>limiter state</th><th>expires at</th></tr></thead>
+          <tbody id="db-state"></tbody>
+        </table>
+        <div class="log-box" id="db-log"></div>
+      </div>
+
+      <!-- ============================================================ -->
+      <h2 id="c-async">5 · Async I/O for external calls</h2>
+      <p>
+        A refresh needs an HTTP call that takes 50–500&nbsp;ms. If that
+        call blocks inside <code>processElement</code>, the subtask
+        handles about 5 records per second, and backpressure slows every
+        source down to that rate. <code>AsyncDataStream</code> allows many
+        calls to be in flight at once from a single subtask:
+      </p>
+      <pre><code>AsyncDataStream.unorderedWait(
+        refreshWithToken.keyBy(e -&gt; e.f1.getDeviceId()),
+        new AsyncCaller(props),          // RichAsyncFunction
+        operatorTimeoutMs, TimeUnit.MILLISECONDS)   // capacity defaults to 100
+    .uid("asyncCaller");
+
+// inside AsyncCaller
+public void open(Configuration c) {
+  http     = new OkHttpClient.Builder().callTimeout(httpTimeoutMs, MILLISECONDS).build();
+  executor = Executors.newFixedThreadPool(poolSize);   // blocking client → own threads
+}
+public void asyncInvoke(Envelope in, ResultFuture&lt;Envelope&gt; rf) {
+  CompletableFuture.supplyAsync(() -&gt; call(in), executor)
+      .whenComplete((res, err) -&gt; rf.complete(
+          err == null &amp;&amp; res != null ? List.of(res) : List.of()));  // never completeExceptionally
+}</code></pre>
+      <ul>
+        <li><strong><code>unorderedWait</code> vs. <code>orderedWait</code>:</strong>
+          ordered mode holds each result until every earlier request has
+          finished, so one slow call delays all the results behind it.
+          Refreshes for different devices do not depend on each other,
+          so unordered mode is the right choice here.</li>
+        <li><strong>Capacity</strong> is the maximum number of requests in
+          flight. When it is full, the operator applies backpressure.
+          That keeps the external API from being flooded, but it also
+          means a slow API slows down the whole job.</li>
+        <li><strong>Async functions can't use keyed state.</strong> The
+          <code>keyBy</code> before the async operator only spreads the
+          work across subtasks. That is why the token is fetched in a
+          separate keyed <code>flatMap</code> before this step.</li>
+        <li><strong>Failure policy:</strong> calling
+          <code>completeExceptionally</code> fails the task and restarts
+          the job. Completing with an empty list drops only that record,
+          and a success/failure counter tracks how often it happens.</li>
+      </ul>
+      <div class="callout">
+        <strong>Watch out for timeouts.</strong> If you don't override
+        <code>RichAsyncFunction.timeout()</code>, an operator timeout
+        completes the request <em>exceptionally</em>, and that restarts
+        the job. Either set the HTTP client's timeout clearly below the
+        operator timeout, or override <code>timeout()</code> to call
+        <code>rf.complete(List.of())</code> and increment a counter.
+      </div>
+
+      <h3>Try it: async timeline</h3>
+      <p>
+        Six requests arrive one tick apart, each with a different
+        latency. Compare ordered and unordered mode, reduce capacity to
+        see backpressure, then shorten the timeout to see the difference
+        between the default <code>timeout()</code> and an overridden one.
+      </p>
+      <div class="widget">
+        <div class="widget-label">AsyncDataStream simulator</div>
+        <div class="controls">
+          <div class="pill-toggle" id="as-order" role="group" aria-label="Result order">
+            <button class="active" data-v="unordered">unorderedWait</button>
+            <button data-v="ordered">orderedWait</button>
+          </div>
+          <label>capacity
+            <select id="as-cap"><option value="6" selected>6</option><option value="3">3</option><option value="2">2</option></select>
+          </label>
+          <label>timeout
+            <select id="as-timeout"><option value="12" selected>12 ticks</option><option value="8">8 ticks</option><option value="6">6 ticks</option></select>
+          </label>
+          <label>timeout()
+            <select id="as-tmode"><option value="fail">default (fail job)</option><option value="empty">overridden (complete empty)</option></select>
+          </label>
+          <button class="btn btn-secondary btn-sm" id="as-shuffle">🎲 New latencies</button>
+        </div>
+        <div class="tl-wrap"><div class="tl" id="as-tl"></div></div>
+        <div class="tl-legend">
+          <span style="--c: var(--text-faint); --o: 0.35">waiting for capacity</span>
+          <span style="--c: var(--accent)">in flight</span>
+          <span style="--c: var(--warn); --o: 0.6">done, held for order</span>
+          <span style="--c: var(--danger)">timed out</span>
+          <span style="--c: var(--success)">emitted</span>
+        </div>
+        <div class="result-box" id="as-result" aria-live="polite"></div>
+      </div>
+
+      <!-- ============================================================ -->
+      <h2 id="c-dlq">6 · Never throw from <code>processElement</code></h2>
+      <p>
+        If <code>processElement</code> throws an exception, the task
+        fails, the job restarts from the last checkpoint, and the same
+        record is processed again. If the record is malformed, it will
+        throw again every time. That is a <strong>poison
+        pill</strong>: the job keeps restarting and never gets past that
+        record. Every operator in this job uses the same structure:
+      </p>
+      <pre><code>public void processElement(Envelope in, Context ctx, Collector&lt;Envelope&gt; out) {
+  var span = Telemetry.start("staticDataProcessor", in.f0);
+  try {
+    process(in, ctx, out);
+    successCounter.inc();
+  } catch (Exception e) {
+    failedCounter.inc();
+    span.logException(e);
+    ctx.output(DLQ, in);          // keep the record for auditing and replay
+  } finally {
+    Telemetry.finish(span);
+  }
+}
+
+// job: merge every DLQ, spread evenly, one sink
+staticOut.getSideOutput(DLQ).union(globalOut.getSideOutput(DLQ))
+         .rebalance()
+         .sinkTo(firehoseSink).uid("dlqFirehoseSink");</code></pre>
+      <ul>
+        <li><strong>Errors in deserialization are handled the same way.</strong> A
+          <code>KafkaRecordDeserializationSchema</code> receives a
+          <code>Collector</code>, so a record that can't be parsed simply
+          results in no output. The schema increments an
+          <code>invalid</code> counter and does not throw.</li>
+        <li><strong>Why <code>rebalance()</code>?</strong> DLQ traffic comes
+          from whichever subtask failed, so it is uneven. Round-robin
+          distribution spreads that load evenly across the sink's
+          subtasks.</li>
+        <li><strong>The exception is <code>open()</code>.</strong> If a
+          database or HTTP client can't be created, it is better to throw a
+          <code>FlinkRuntimeException</code> and fail immediately than to
+          process records with a broken client.</li>
+      </ul>
+
+      <!-- ============================================================ -->
+      <h2 id="c-ops">7 · Settings that make the job operable</h2>
+      <table>
+        <thead><tr><th>Setting</th><th>What the job does</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr><td><code>.uid()</code> + <code>.name()</code></td><td>On every source, operator and sink, using values from one enum</td><td>A stable uid is how savepoint state is matched to operators. Without one, the uid is derived from the graph shape, and adding a single source would break the restore.</td></tr>
+          <tr><td>Per-operator <code>setParallelism</code></td><td>Sources: up to the partition count. Token cache / async / sinks: 1. Processors: full.</td><td>Size each operator to its actual bottleneck: partitions, distinct keys, API rate limits.</td></tr>
+          <tr><td><code>setMaxParallelism(256)</code></td><td>Set explicitly</td><td>This is the number of key groups, and it can never change after state exists. It is the upper limit for rescaling.</td></tr>
+          <tr><td><code>WatermarkStrategy.noWatermarks()</code></td><td>On every source</td><td>No windows and no event-time timers means watermarks would be overhead with no benefit.</td></tr>
+          <tr><td>Checkpoint interval / min pause / timeout</td><td>3 min / 2 min / 2 min, tolerate 5 failures</td><td>State is small, and the database is the source of truth, so infrequent checkpoints are enough. A few tolerated failures stop one slow snapshot from restarting the job.</td></tr>
+          <tr><td>Protobuf serializer registration</td><td><code>PipelineOptions.SERIALIZATION_CONFIG</code></td><td>Without it, Flink falls back to Kryo for Protobuf classes, which is slow and doesn't support schema evolution.</td></tr>
+          <tr><td>Metrics in <code>open()</code></td><td>Counters for success/failed/invalid, gauges for latency</td><td>The metric group is only available from the runtime context once the operator is running. Register metrics once in <code>open()</code>, not for every record.</td></tr>
+          <tr><td>Heavy clients in <code>open()</code>, <code>transient</code></td><td>HTTP clients, DB clients, Caffeine caches</td><td>The function object is serialized and sent to the TaskManagers. Clients are created there, and <code>transient</code> keeps them out of the serialized object.</td></tr>
+        </tbody>
+      </table>
+
+      <nav class="module-pager">
+        <a class="pager-link prev" href="10-production-architecture.html">
+          <span class="dir">← Previous</span>
+          <span class="title">10. Production Architecture</span>
+        </a>
+        <a class="pager-link next" href="../cheatsheet.html">
+          <span class="dir">Next</span>
+          <span class="title">Cheatsheet →</span>
+        </a>
+      </nav>
+
+      <div id="quiz-root" data-module-id="patterns"></div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>Flink Interactive Guide — <a href="../index.html">back to overview</a></p>
+    </div>
+  </footer>
+
+  <script src="../assets/js/app.js"></script>
+  <script>
+    /* ---------- Job graph ---------- */
+    (function () {
+      const info = {
+        sources: ["Sources", "Each source is a KafkaSource or KinesisStreamsSource with WatermarkStrategy.noWatermarks(), its own uid, and parallelism capped at the partition count. Each deserializer outputs the same envelope type, which is what makes union() possible.", "#c-union"],
+        router: ["Router: KeyedProcessFunction", "Unions the job, refresh and admin streams, keys by whichever ID the event has, and splits by subtype into main / static / refresh side outputs. Refreshes go through a per-key ValueState TTL debounce.", "#c-side"],
+        token: ["Token cache: keyed flatMap", "Keyed by eventType (about 7 keys, parallelism 1). A ValueState<String> with TTL equal to the token lifetime caches the OAuth token. NeverReturnExpired guarantees an expired token is never used.", "#c-ttl"],
+        async: ["Async I/O", "AsyncDataStream.unorderedWait runs blocking HTTP calls on a dedicated thread pool. Results join both processors again through union(). Failures complete with an empty list so the job keeps running.", "#c-async"],
+        global: ["Global processor", "Keyed by jobId. Writes compressed records that apply to many devices to the database. Exceptions go to the DLQ side output; nothing is thrown.", "#c-dlq"],
+        static: ["Static processor", "Keyed by deviceId, so all updates for one device go to one subtask in order. Merges the update into the stored record and sends a notification to a P0/P1/P2 side output.", "#c-keyby"],
+        sinks: ["Priority sinks", "Three KinesisStreamsSinks, one per priority side output, each with its own batching and max-in-flight settings. The partition key is deviceId, so per-device order is kept downstream.", "#c-side"],
+        dlq: ["Dead-letter queue", "DLQ side outputs from both processors → union() → rebalance() → Firehose sink. The router also writes to a DLQ tag, but the graph never reads it, so those records are discarded.", "#c-dlq"],
+      };
+      const box = document.getElementById("graph-info");
+      const nodes = document.querySelectorAll(".diagram-node");
+      function show(key) {
+        const [title, text, href] = info[key];
+        nodes.forEach((n) => n.classList.toggle("selected", n.getAttribute("data-node") === key));
+        box.innerHTML = "";
+        const strong = document.createElement("strong");
+        strong.textContent = title + ": ";
+        const link = document.createElement("a");
+        link.href = href;
+        link.textContent = " Read more ↓";
+        box.append(strong, document.createTextNode(text), link);
+      }
+      nodes.forEach((n) => {
+        const key = n.getAttribute("data-node");
+        n.addEventListener("click", () => show(key));
+        n.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); show(key); } });
+      });
+      show("router");
+    })();
+
+    /* ---------- Debounce router ---------- */
+    (function () {
+      const keys = ["dev-1", "dev-2", "dev-3"];
+      let clock, state, counts, mode;
+      const $ = (id) => document.getElementById(id);
+      const log = $("db-log");
+
+      function reset() {
+        clock = 0;
+        state = {};
+        counts = { static: 0, refresh: 0, dropped: 0, dlq: 0 };
+        log.innerHTML = "";
+        render();
+      }
+
+      function ttl() { return parseInt($("db-ttl").value, 10); }
+
+      // NeverReturnExpired: an expired entry reads as null.
+      function read(key) {
+        const s = state[key];
+        if (!s || s.expiresAt <= clock) return null;
+        if (mode === "read") s.expiresAt = clock + ttl();
+        return s.value;
+      }
+
+      function write(key, value) { state[key] = { value, expiresAt: clock + ttl() }; }
+
+      function line(text, cls) {
+        const d = document.createElement("div");
+        if (cls) d.className = cls;
+        d.textContent = `[t=${clock}s] ${text}`;
+        log.appendChild(d);
+        log.scrollTop = log.scrollHeight;
+      }
+
+      function bump(lane) {
+        counts[lane]++;
+        const el = document.querySelector(`.lane[data-lane="${lane}"]`);
+        el.classList.add("flash");
+        setTimeout(() => el.classList.remove("flash"), 300);
+      }
+
+      function send(kind) {
+        const key = $("db-key").value;
+        if (kind === "update") {
+          bump("static");
+          line(`${key} profile update → ctx.output(STATIC)`, "ok");
+        } else if (kind === "refresh") {
+          const v = read(key);
+          if (v !== true) {
+            write(key, true);
+            bump("refresh");
+            line(`${key} refresh: state=${v === null ? "null" : v} → update(true), ctx.output(REFRESH)`, "info");
+          } else {
+            bump("dropped");
+            const extra = mode === "read" ? ` (read reset TTL → expires t=${state[key].expiresAt}s)` : "";
+            line(`${key} refresh: state=true → debounced, counter++${extra}`, "warn");
+          }
+        } else {
+          bump("dlq");
+          line(`${key} malformed → exception caught → ctx.output(DLQ)`, "fail");
+        }
+        render();
+      }
+
+      function render() {
+        $("db-clock").textContent = clock;
+        Object.keys(counts).forEach((k) => {
+          document.querySelector(`.lane[data-lane="${k}"] .n`).textContent = counts[k];
+        });
+        const tbody = $("db-state");
+        tbody.innerHTML = "";
+        keys.forEach((k) => {
+          const s = state[k];
+          const live = s && s.expiresAt > clock;
+          const tr = document.createElement("tr");
+          [k, live ? "true" : "∅ (empty / expired)", live ? `t=${s.expiresAt}s (in ${s.expiresAt - clock}s)` : "—"].forEach((t) => {
+            const td = document.createElement("td");
+            td.textContent = t;
+            tr.appendChild(td);
+          });
+          tbody.appendChild(tr);
+        });
+      }
+
+      document.querySelectorAll("[data-send]").forEach((b) => b.addEventListener("click", () => send(b.getAttribute("data-send"))));
+      $("db-tick").addEventListener("click", () => { clock += 10; line("clock advanced 10 s"); render(); });
+      $("db-reset").addEventListener("click", reset);
+      $("db-ttl").addEventListener("change", () => { reset(); line(`TTL set to ${ttl()} s (state cleared)`); });
+      document.querySelectorAll("#db-mode button").forEach((b) => b.addEventListener("click", () => {
+        document.querySelectorAll("#db-mode button").forEach((x) => x.classList.toggle("active", x === b));
+        mode = b.getAttribute("data-mode");
+        reset();
+        line(`UpdateType = ${mode === "read" ? "OnReadAndWrite" : "OnCreateAndWrite"} (state cleared)`);
+      }));
+
+      mode = "write";
+      reset();
+    })();
+
+    /* ---------- Async I/O timeline ---------- */
+    (function () {
+      const $ = (id) => document.getElementById(id);
+      let latencies = [3, 9, 2, 4, 1, 5];
+      let order = "unordered";
+
+      function simulate() {
+        const cap = parseInt($("as-cap").value, 10);
+        const timeout = parseInt($("as-timeout").value, 10);
+        const failJob = $("as-tmode").value === "fail";
+        const reqs = [];
+        latencies.forEach((lat, i) => {
+          const arrive = i;
+          // Start once fewer than `cap` earlier requests are still queued (in flight or held).
+          let start = Math.max(arrive, i > 0 ? reqs[i - 1].start : 0);
+          while (reqs.filter((r) => r.start <= start && start < r.emit).length >= cap) start++;
+          const timedOut = lat > timeout;
+          const ready = start + Math.min(lat, timeout);
+          const emit = order === "ordered" && i > 0 ? Math.max(ready, reqs[i - 1].emit) : ready;
+          reqs.push({ id: `r${i + 1}`, arrive, start, ready, emit, lat, timedOut });
+        });
+
+        let failAt = null;
+        if (failJob) {
+          const t = reqs.filter((r) => r.timedOut).map((r) => r.ready);
+          if (t.length) failAt = Math.min(...t);
+        }
+        return { reqs, failAt, timeout };
+      }
+
+      function render() {
+        const { reqs, failAt, timeout } = simulate();
+        const end = Math.max(...reqs.map((r) => r.emit), 1) + 1;
+        const pct = (t) => `${(t / end) * 100}%`;
+        const tl = $("as-tl");
+        tl.innerHTML = "";
+
+        reqs.forEach((r) => {
+          const lost = failAt !== null && r.emit > failAt;
+          const row = document.createElement("div");
+          row.className = "tl-row";
+          const label = document.createElement("div");
+          label.textContent = `${r.id} (${r.lat})`;
+          const track = document.createElement("div");
+          track.className = "tl-track";
+          const bar = (from, to, cls) => {
+            if (to <= from) return;
+            const b = document.createElement("div");
+            b.className = "tl-bar " + cls;
+            b.style.left = pct(from);
+            b.style.width = `calc(${pct(to - from)} - 1px)`;
+            track.appendChild(b);
+          };
+          bar(r.arrive, r.start, "wait");
+          bar(r.start, r.ready, r.timedOut ? "timeout" : lost ? "lost" : "");
+          bar(r.ready, r.emit, lost ? "lost" : "hold");
+          let status;
+          if (lost && !(r.timedOut && r.ready === failAt)) status = "lost";
+          else if (r.timedOut) status = failJob ? "💥 fail" : "dropped";
+          else {
+            status = `@${r.emit}`;
+            const m = document.createElement("div");
+            m.className = "tl-emit";
+            m.style.left = `calc(${pct(r.emit)} - 2px)`;
+            track.appendChild(m);
+          }
+          const st = document.createElement("div");
+          st.textContent = status;
+          row.append(label, track, st);
+          tl.appendChild(row);
+        });
+
+        const axis = document.createElement("div");
+        axis.className = "tl-axis";
+        const ticks = document.createElement("div");
+        ticks.className = "ticks";
+        [0, Math.round(end / 2), end].forEach((t) => { const s = document.createElement("span"); s.textContent = t; ticks.appendChild(s); });
+        axis.append(document.createElement("div"), ticks, document.createElement("div"));
+        tl.appendChild(axis);
+
+        const box = $("as-result");
+        const emitted = reqs.filter((r) => !r.timedOut && (failAt === null || r.emit <= failAt));
+        const emitOrder = emitted.slice().sort((a, b) => a.emit - b.emit || a.start - b.start).map((r) => r.id).join(", ");
+        if (failAt !== null) {
+          box.className = "result-box err";
+          box.textContent = `t=${failAt}: a request hit the ${timeout}-tick timeout. The default timeout() completes exceptionally, so the task fails and the job restarts from the last checkpoint. Results not yet emitted are lost and the source replays them, so downstream sees duplicates unless the sink is idempotent. Emitted before the failure: ${emitOrder || "none"}.`;
+        } else {
+          const dropped = reqs.filter((r) => r.timedOut).length;
+          box.className = "result-box ok";
+          box.textContent = `Output order: ${emitOrder}. Finished at t=${end - 1}.` +
+            (dropped ? ` ${dropped} timed-out request(s) completed empty and were counted; the job kept running.` : "") +
+            (order === "ordered" ? " In ordered mode, fast results wait behind slow ones." : " In unordered mode, each result is emitted as soon as it is ready.");
+        }
+      }
+
+      document.querySelectorAll("#as-order button").forEach((b) => b.addEventListener("click", () => {
+        document.querySelectorAll("#as-order button").forEach((x) => x.classList.toggle("active", x === b));
+        order = b.getAttribute("data-v");
+        render();
+      }));
+      ["as-cap", "as-timeout", "as-tmode"].forEach((id) => $(id).addEventListener("change", render));
+      $("as-shuffle").addEventListener("click", () => {
+        latencies = latencies.map(() => 1 + Math.floor(Math.random() * 10));
+        render();
+      });
+      render();
+    })();
+
+    window.QUIZ_DATA = {
+      title: "Check your understanding",
+      questions: [
+        {
+          prompt: "A KeyedProcessFunction calls ctx.output(DLQ, record) on errors, but the job graph never calls getSideOutput(DLQ) on that operator. What happens to those records?",
+          options: [
+            "Flink sends them to the main output instead",
+            "The job fails at submission with a validation error",
+            "They are silently discarded",
+            "They are buffered in state until a consumer is attached",
+          ],
+          correct: 2,
+          explain: "A side output only exists in the graph if something reads it with getSideOutput(tag). Otherwise ctx.output() writes to nothing, without any warning.",
+        },
+        {
+          prompt: "A refresh debounce uses ValueState with a 30 s TTL. A device sends a refresh every 10 s, forever. With UpdateType.OnReadAndWrite, how often does a refresh reach the HTTP call?",
+          options: [
+            "Every 30 s",
+            "Only once: each read resets the TTL, so the flag never expires",
+            "Every 10 s",
+            "Never, not even the first time",
+          ],
+          correct: 1,
+          explain: "OnReadAndWrite extends the TTL on every access, so each debounced request keeps the flag alive. OnCreateAndWrite only extends it when the flag is written, so a refresh gets through every 30 s.",
+        },
+        {
+          prompt: "Why does the job use AsyncDataStream.unorderedWait rather than orderedWait for refresh HTTP calls?",
+          options: [
+            "orderedWait doesn't support timeouts",
+            "Refreshes for different devices don't depend on each other, so there's no reason to hold fast results behind a slow call",
+            "unorderedWait gives exactly-once semantics and orderedWait doesn't",
+            "orderedWait can't be used after keyBy",
+          ],
+          correct: 1,
+          explain: "Ordered mode holds each result until every earlier one has been emitted, so one slow call delays everything behind it. Unordered mode emits each result when it is ready, which is correct when results are independent.",
+        },
+        {
+          prompt: "A token-cache operator is keyed by eventType, and there are 7 event types. What happens if you give it parallelism 32?",
+          options: [
+            "Throughput scales roughly 32×",
+            "The job fails to start",
+            "At most 7 subtasks ever receive records; the other 25 sit idle",
+            "Flink automatically re-keys to use all 32 subtasks",
+          ],
+          correct: 2,
+          explain: "Each key maps to one key group, and each key group belongs to one subtask. With 7 distinct keys, at most 7 subtasks can receive data, so useful parallelism is limited by key cardinality.",
+        },
+      ],
+    };
+  </script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

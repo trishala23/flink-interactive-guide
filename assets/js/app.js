@@ -13,6 +13,7 @@ const MODULES = [
   { id: "lab", title: "The Lab", file: "08-lab.html" },
   { id: "connectors", title: "Connectors Lab", file: "09-connectors.html" },
   { id: "production", title: "Production Architecture Lab", file: "10-production-architecture.html" },
+  { id: "patterns", title: "Patterns from a Real Job", file: "11-production-patterns.html" },
 ];
 
 function getProgress() {

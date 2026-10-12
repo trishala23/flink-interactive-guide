@@ -80,6 +80,20 @@
       </tbody>
     </table>
 
+    <h2>Production patterns</h2>
+    <table>
+      <thead><tr><th>Pattern</th><th>API</th><th>Remember</th></tr></thead>
+      <tbody>
+        <tr><td>Merge same-typed sources</td><td><code>a.union(b, c)</code></td><td>Same type only; use <code>connect</code> for two different types.</td></tr>
+        <tr><td>Route one input to many outputs</td><td><code>ctx.output(tag, x)</code> + <code>getSideOutput(tag)</code></td><td><code>new OutputTag&lt;T&gt;("id") {}</code>. A tag nobody reads is discarded silently.</td></tr>
+        <tr><td>Debounce / expiring cache</td><td><code>StateTtlConfig</code> on a <code>ValueStateDescriptor</code></td><td><code>OnCreateAndWrite</code> + <code>NeverReturnExpired</code>; TTL uses processing time.</td></tr>
+        <tr><td>Non-blocking external calls</td><td><code>AsyncDataStream.unorderedWait(s, fn, timeout, unit, capacity)</code></td><td>No keyed state inside. Override <code>timeout()</code>, or a timeout fails the job.</td></tr>
+        <tr><td>Poison-pill safety</td><td><code>try/catch</code> → <code>ctx.output(DLQ, x)</code></td><td>Throwing from <code>processElement</code> restarts the job, which replays the same record.</td></tr>
+        <tr><td>Even out a skewed stream</td><td><code>.rebalance()</code></td><td>Round-robin before a sink that receives uneven traffic.</td></tr>
+        <tr><td>Savepoint-safe topology</td><td><code>.uid("stable-id")</code> on every operator</td><td><code>setMaxParallelism</code> can't be changed once state exists.</td></tr>
+      </tbody>
+    </table>
+
     <h2>Core concepts, one line each</h2>
     <table>
       <thead><tr><th>Term</th><th>One-line definition</th></tr></thead>
