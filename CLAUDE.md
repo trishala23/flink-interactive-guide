@@ -4,13 +4,16 @@ Guidance for Claude (or any AI assistant) working in this repository.
 
 ## What this project is
 
-A free, static, interactive web guide for learning Apache Flink. Ten
+A free, static, interactive web guide for learning Apache Flink. Eleven
 modules, each pairing a short theory explanation with a hands-on browser
 widget and a quiz — Module 08 ("The Lab") is a capstone pipeline builder,
 Module 09 ("Connectors Lab") simulates consuming from a Kafka topic or
 Kinesis stream, and Module 10 ("Production Architecture Lab") is a
 clickable diagram of a realistic end-to-end production stack with a
-record-trace simulator. Zero backend, zero build step, zero
+record-trace simulator, and Module 11 ("Patterns from a Real Job") walks
+through the Flink concepts inside a real multi-source enrichment job
+(union, keyBy, side outputs, state TTL, async I/O, DLQ) with two
+simulators. Zero backend, zero build step, zero
 dependencies — deployed as-is to GitHub Pages. Read `README.md` for the
 full feature list and roadmap.
 
@@ -34,7 +37,7 @@ full feature list and roadmap.
 ```
 index.html                    Landing page
 cheatsheet.html                Quick-reference page
-modules/NN-slug.html           One file per module (01 through 10)
+modules/NN-slug.html           One file per module (01 through 11)
 assets/css/style.css           The entire design system — all styling lives here
 assets/js/app.js               Shared: nav, progress tracking, code tabs, active-link highlighting
 assets/js/quiz.js              Generic quiz renderer (data-driven)
@@ -48,6 +51,8 @@ Module 10's diagram-click and record-trace logic lives inline in its own
 `assets/js/` file — it's simple enough (deterministic branching, no math
 to get wrong) that a dedicated engine file isn't warranted the way it was
 for Modules 08–09.
+Module 11's two simulators (TTL debounce, async timeline) live inline
+for the same reason.
 
 Every module page is fully self-contained HTML with its own inline
 `<script>` for widget logic — there is no client-side router and no
